@@ -9,7 +9,7 @@ import { seedView, ProxyConfig } from "./youtube";
 // ─────────────────────────────────────────────────────────────
 
 const app = express();
-const PORT = Number(process.env.GS_BOT_PORT) || 3366;
+const PORT = Number(process.env.GS_YT_BOT_PORT) || 3366; // 골든시드 유튜브 봇(3앱 동시: 퍼블리 333x·트래픽 336x·골든시드 3366/3367)
 const AUTH_TOKEN = process.env.BOT_AUTH_TOKEN || "";
 
 app.use(cors({ origin: ["http://localhost:5173", "http://127.0.0.1:5173", "null"] }));

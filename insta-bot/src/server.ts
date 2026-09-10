@@ -10,7 +10,7 @@ import {
 } from "./supabase";
 
 const app = express();
-const PORT = Number(process.env.PUBLY_BOT_PORT) || 3365;
+const PORT = Number(process.env.GS_INSTA_BOT_PORT) || 3367; // 골든시드 인스타 봇(트래픽 insta 3365와 분리 → 3앱 동시 실행)
 const AUTH_TOKEN = process.env.BOT_AUTH_TOKEN || "";
 
 app.use(cors({ origin: ["http://localhost:5173", "http://127.0.0.1:5173", "null"] }));
