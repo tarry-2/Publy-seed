@@ -28,27 +28,15 @@
   <!-- 얇은 이너 테두리 -->
   <rect x="26" y="26" width="972" height="972" rx="210" ry="210" fill="none" stroke="#fff3cf" stroke-opacity="0.5" stroke-width="5"/>
 
-  <!-- 새싹 심볼 (줄기 + 잎 2장) -->
-  <g filter="url(#soft)" fill="url(#sprout)">
-    <!-- 줄기 -->
-    <path d="M512 690
-             C 500 560, 500 470, 512 372
-             C 524 470, 524 560, 512 690 Z"/>
-    <!-- 왼쪽 잎 -->
-    <path d="M500 486
-             C 430 372, 300 356, 232 372
-             C 258 470, 360 524, 500 500 Z"/>
-    <!-- 오른쪽 잎 -->
-    <path d="M524 452
-             C 590 320, 720 300, 792 318
-             C 762 420, 656 480, 524 468 Z"/>
-    <!-- 씨앗 점(잎 사이 포인트) -->
-    <circle cx="512" cy="392" r="20"/>
-  </g>
+  <!-- 로고 심볼: C (딥브라운, 골드 배경에서 또렷) -->
+  <text x="512" y="648" text-anchor="middle" filter="url(#soft)"
+        font-family="'Arial Black','Arial Bold',Arial,sans-serif"
+        font-size="620" font-weight="900" letter-spacing="-10"
+        fill="url(#sprout)">C</text>
 
   <!-- 텍스트: 골든시드 -->
-  <text x="512" y="836" text-anchor="middle"
+  <text x="512" y="852" text-anchor="middle"
         font-family="'Apple SD Gothic Neo','Pretendard','Noto Sans KR',sans-serif"
-        font-size="128" font-weight="800" letter-spacing="2"
+        font-size="120" font-weight="800" letter-spacing="2"
         fill="#241a08">골든시드</text>
 </svg>

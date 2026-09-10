@@ -1,0 +1,74 @@
+<svg width="240" height="264" viewBox="0 0 240 264" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f9dd86"/>
+      <stop offset="52%" stop-color="#f5c451"/>
+      <stop offset="100%" stop-color="#d9a63a"/>
+    </linearGradient>
+    <linearGradient id="bodyDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8b84a"/>
+      <stop offset="100%" stop-color="#c2902c"/>
+    </linearGradient>
+    <radialGradient id="face" cx="50%" cy="38%" r="70%">
+      <stop offset="0%" stop-color="#2c2315"/>
+      <stop offset="100%" stop-color="#181207"/>
+    </radialGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#8fe39b"/>
+      <stop offset="100%" stop-color="#4faf63"/>
+    </linearGradient>
+    <radialGradient id="eye" cx="38%" cy="32%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="34%" stop-color="#ffe9a8"/>
+      <stop offset="100%" stop-color="#f2bd44"/>
+    </radialGradient>
+    <filter id="soft" x="-25%" y="-25%" width="150%" height="150%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#7a5a12" flood-opacity="0.32"/>
+    </filter>
+  </defs>
+
+  <!-- 안테나: 새싹(씨앗→새싹) = 골든시드 정체성 -->
+  <g filter="url(#soft)">
+    <path d="M120 66 C 118 48, 118 40, 120 30" stroke="#c2902c" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M120 46 C 104 33, 84 35, 76 44 C 89 57, 108 56, 120 50 Z" fill="url(#leaf)"/>
+    <path d="M120 40 C 136 26, 156 28, 164 37 C 151 50, 132 50, 120 43 Z" fill="url(#leaf)"/>
+    <circle cx="120" cy="27" r="7.5" fill="#f5c451" stroke="#c2902c" stroke-width="2"/>
+  </g>
+
+  <!-- 헤드폰 밴드 -->
+  <path d="M62 120 C 62 76, 178 76, 178 120" stroke="url(#bodyDark)" stroke-width="11" fill="none" stroke-linecap="round"/>
+
+  <!-- 머리 -->
+  <g filter="url(#soft)">
+    <rect x="56" y="66" width="128" height="106" rx="36" fill="url(#body)" stroke="#eabf52" stroke-width="2"/>
+    <rect x="73" y="84" width="94" height="72" rx="27" fill="url(#face)"/>
+    <!-- 눈 -->
+    <circle cx="101" cy="118" r="15.5" fill="url(#eye)"/>
+    <circle cx="139" cy="118" r="15.5" fill="url(#eye)"/>
+    <circle cx="103" cy="120" r="7" fill="#181207"/>
+    <circle cx="141" cy="120" r="7" fill="#181207"/>
+    <circle cx="99" cy="113" r="3.2" fill="#fff"/>
+    <circle cx="137" cy="113" r="3.2" fill="#fff"/>
+    <!-- 볼 홍조 -->
+    <ellipse cx="86" cy="139" rx="7.5" ry="4.2" fill="#ff9e6b" opacity="0.5"/>
+    <ellipse cx="154" cy="139" rx="7.5" ry="4.2" fill="#ff9e6b" opacity="0.5"/>
+    <!-- 스마일 -->
+    <path d="M108 140 Q 120 149, 132 140" stroke="#ffe9a8" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+  </g>
+
+  <!-- 헤드폰 이어컵 -->
+  <rect x="45" y="104" width="23" height="36" rx="11" fill="url(#bodyDark)" stroke="#c2902c" stroke-width="2"/>
+  <rect x="172" y="104" width="23" height="36" rx="11" fill="url(#bodyDark)" stroke="#c2902c" stroke-width="2"/>
+
+  <!-- 팔 -->
+  <rect x="60" y="184" width="16" height="36" rx="8" fill="url(#bodyDark)"/>
+  <rect x="164" y="184" width="16" height="36" rx="8" fill="url(#bodyDark)"/>
+
+  <!-- 바디 -->
+  <g filter="url(#soft)">
+    <path d="M82 180 Q 120 169, 158 180 L 151 230 Q 120 241, 89 230 Z" fill="url(#body)" stroke="#eabf52" stroke-width="2"/>
+    <!-- 가슴 C 엠블럼 -->
+    <circle cx="120" cy="203" r="20" fill="#181207"/>
+    <text x="120" y="214" text-anchor="middle" font-family="'Arial Black','Arial Bold',sans-serif" font-size="27" font-weight="900" fill="#f5c451">C</text>
+  </g>
+</svg>

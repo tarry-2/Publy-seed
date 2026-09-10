@@ -34,3 +34,8 @@ _flowtest*
 _flowrun*
 naver_state.json
 neighbor-bot/naver_state.json
+
+# 검증용 렌더 캡처(재생성 가능)
+scripts/login-*.png
+scripts/seeding-*.png
+scripts/mascot.png

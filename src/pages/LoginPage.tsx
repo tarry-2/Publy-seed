@@ -21,7 +21,7 @@ const CSS = `
 }
 @keyframes star-twinkle { 0%,100%{opacity:.3;transform:scale(1)} 50%{opacity:1;transform:scale(1.4)} }
 @keyframes card-float { 0%,100%{transform:translateY(0) rotateX(0)} 50%{transform:translateY(-8px) rotateX(.5deg)} }
-@keyframes glow-breathe { 0%,100%{box-shadow:0 0 40px rgba(109,40,217,.15),0 0 80px rgba(109,40,217,.05)} 50%{box-shadow:0 0 60px rgba(109,40,217,.3),0 0 120px rgba(109,40,217,.1)} }
+@keyframes glow-breathe { 0%,100%{box-shadow:0 0 40px rgba(245,196,81,.15),0 0 80px rgba(245,196,81,.05)} 50%{box-shadow:0 0 60px rgba(245,196,81,.3),0 0 120px rgba(245,196,81,.1)} }
 @keyframes line-scan { 0%{transform:translateY(-100%)} 100%{transform:translateY(100vh)} }
 @keyframes logo-emerge { 0%{opacity:0;transform:scale(.6) rotateY(-90deg)} 100%{opacity:1;transform:scale(1) rotateY(0deg)} }
 @keyframes form-rise { 0%{opacity:0;transform:translateY(40px)} 100%{opacity:1;transform:translateY(0)} }
@@ -39,8 +39,8 @@ const CSS = `
   position:relative; font-family:'Noto Sans KR',sans-serif;
   perspective:1000px;
 }
-.login-root.dark  { background:radial-gradient(1200px 800px at 20% 0%, #2a1420 0%, #170d14 55%, #0d070b 100%); }
-.login-root.light { background:radial-gradient(1200px 800px at 20% 0%, #fdeef4 0%, #f7edf3 55%, #f3eef2 100%); }
+.login-root.dark  { background:radial-gradient(1200px 800px at 20% 0%, #1c1608 0%, #140f08 55%, #08070b 100%); }
+.login-root.light { background:radial-gradient(1200px 800px at 20% 0%, #fdf6e3 0%, #f9f2df 55%, #f5efe0 100%); }
 
 /* 우주 배경 */
 .cosmos-bg {
@@ -55,25 +55,25 @@ const CSS = `
 .cosmos-orb-1 { width:600px; height:600px; top:-200px; left:-200px; animation:cosmos-drift 20s linear infinite; }
 .cosmos-orb-2 { width:400px; height:400px; bottom:-100px; right:-100px; animation:cosmos-drift 25s linear infinite reverse; }
 .cosmos-orb-3 { width:300px; height:300px; top:50%; left:50%; animation:cosmos-drift 15s linear infinite; }
-.dark .cosmos-orb-1  { background:radial-gradient(circle,rgba(109,40,217,.12) 0%,transparent 70%); }
-.dark .cosmos-orb-2  { background:radial-gradient(circle,rgba(139,92,246,.08) 0%,transparent 70%); }
-.dark .cosmos-orb-3  { background:radial-gradient(circle,rgba(139,92,246,.06) 0%,transparent 70%); }
-.light .cosmos-orb-1 { background:radial-gradient(circle,rgba(109,40,217,.08) 0%,transparent 70%); }
-.light .cosmos-orb-2 { background:radial-gradient(circle,rgba(139,92,246,.06) 0%,transparent 70%); }
-.light .cosmos-orb-3 { background:radial-gradient(circle,rgba(109,40,217,.04) 0%,transparent 70%); }
+.dark .cosmos-orb-1  { background:radial-gradient(circle,rgba(245,196,81,.12) 0%,transparent 70%); }
+.dark .cosmos-orb-2  { background:radial-gradient(circle,rgba(201,160,63,.08) 0%,transparent 70%); }
+.dark .cosmos-orb-3  { background:radial-gradient(circle,rgba(201,160,63,.06) 0%,transparent 70%); }
+.light .cosmos-orb-1 { background:radial-gradient(circle,rgba(245,196,81,.08) 0%,transparent 70%); }
+.light .cosmos-orb-2 { background:radial-gradient(circle,rgba(201,160,63,.06) 0%,transparent 70%); }
+.light .cosmos-orb-3 { background:radial-gradient(circle,rgba(245,196,81,.04) 0%,transparent 70%); }
 
 /* 별 */
 .star { position:absolute; border-radius:50%; animation:star-twinkle var(--dur,3s) var(--del,0s) ease-in-out infinite; }
 .dark .star  { background:white; }
-.light .star { background:rgba(109,40,217,.4); }
+.light .star { background:rgba(245,196,81,.4); }
 
 /* 스캔라인 */
 .scan-line {
   position:absolute; left:0; right:0; height:1px; pointer-events:none;
   animation:line-scan 8s linear infinite;
 }
-.dark .scan-line  { background:linear-gradient(90deg,transparent,rgba(109,40,217,.3),transparent); }
-.light .scan-line { background:linear-gradient(90deg,transparent,rgba(109,40,217,.2),transparent); }
+.dark .scan-line  { background:linear-gradient(90deg,transparent,rgba(245,196,81,.3),transparent); }
+.light .scan-line { background:linear-gradient(90deg,transparent,rgba(245,196,81,.2),transparent); }
 
 /* 상단 버튼 */
 .top-bar { position:fixed; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:center; padding:16px 24px; z-index:100; }
@@ -82,13 +82,13 @@ const CSS = `
   display:flex; align-items:center; justify-content:center; border:1px solid;
   transition:all .25s; backdrop-filter:blur(12px);
 }
-.dark .top-btn  { background:rgba(255,255,255,.05); border-color:rgba(109,40,217,.2); color:white; }
-.light .top-btn { background:rgba(255,255,255,.8); border-color:rgba(109,40,217,.2); color:#09090b; box-shadow:0 2px 12px rgba(0,0,0,.08); }
+.dark .top-btn  { background:rgba(255,255,255,.05); border-color:rgba(245,196,81,.2); color:white; }
+.light .top-btn { background:rgba(255,255,255,.8); border-color:rgba(245,196,81,.2); color:#09090b; box-shadow:0 2px 12px rgba(0,0,0,.08); }
 .top-btn:hover { transform:scale(1.08) rotate(5deg); }
 .admin-btn:hover { transform:scale(1.08) rotate(45deg) !important; }
 .top-brand {
   font-family:'Bebas Neue',sans-serif; font-size:22px; letter-spacing:.2em;
-  background:linear-gradient(135deg,#6d28d9,#5b21b6);
+  background:linear-gradient(135deg,#f5c451,#c9a03f);
   -webkit-background-clip:text; -webkit-text-fill-color:transparent;
 }
 
@@ -107,21 +107,21 @@ const CSS = `
    윈도우에서 버벅임/시간차. 배경 불투명도를 올려 blur 없이도 카드가 또렷하게(성능 회복). */
 .dark .login-card {
   background:rgba(28,24,20,.92);
-  border:1px solid rgba(109,40,217,.15);
-  box-shadow:0 0 0 1px rgba(109,40,217,.05), inset 0 1px 0 rgba(109,40,217,.1);
+  border:1px solid rgba(245,196,81,.15);
+  box-shadow:0 0 0 1px rgba(245,196,81,.05), inset 0 1px 0 rgba(245,196,81,.1);
 }
 .light .login-card {
   background:rgba(255,255,255,.97);
-  border:1px solid rgba(109,40,217,.15);
-  box-shadow:0 32px 80px rgba(0,0,0,.08), 0 0 0 1px rgba(109,40,217,.08);
+  border:1px solid rgba(245,196,81,.15);
+  box-shadow:0 32px 80px rgba(0,0,0,.08), 0 0 0 1px rgba(245,196,81,.08);
 }
 
 /* 카드 상단 장식선 */
 .card-glow-line {
   position:absolute; top:0; left:20%; right:20%; height:1px; border-radius:99px;
 }
-.dark .card-glow-line  { background:linear-gradient(90deg,transparent,rgba(109,40,217,.6),transparent); }
-.light .card-glow-line { background:linear-gradient(90deg,transparent,rgba(109,40,217,.4),transparent); }
+.dark .card-glow-line  { background:linear-gradient(90deg,transparent,rgba(245,196,81,.6),transparent); }
+.light .card-glow-line { background:linear-gradient(90deg,transparent,rgba(245,196,81,.4),transparent); }
 
 /* 로고 */
 .logo-section { text-align:center; margin-bottom:14px; }
@@ -140,31 +140,31 @@ const CSS = `
   inset:8px; animation:spin-rev 5s linear infinite;
   border-style:dotted;
 }
-.dark .logo-ring  { border-color:rgba(109,40,217,.3); }
-.light .logo-ring { border-color:rgba(109,40,217,.3); }
+.dark .logo-ring  { border-color:rgba(245,196,81,.3); }
+.light .logo-ring { border-color:rgba(245,196,81,.3); }
 .logo-core {
   position:absolute; inset:16px; border-radius:50%;
-  background:linear-gradient(135deg,#6d28d9,#5b21b6);
+  background:linear-gradient(135deg,#f5c451,#c9a03f);
   display:flex; align-items:center; justify-content:center;
-  box-shadow:0 0 30px rgba(109,40,217,.5);
+  box-shadow:0 0 30px rgba(245,196,81,.5);
 }
 .logo-pulse {
   position:absolute; inset:16px; border-radius:50%;
-  border:2px solid rgba(109,40,217,.4);
+  border:2px solid rgba(245,196,81,.4);
   animation:pulse-ring 2s ease-out infinite;
 }
 .logo-name {
   font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:.24em; line-height:1;
-  background:linear-gradient(135deg,#6d28d9,#5b21b6,#c4b5fd);
+  background:linear-gradient(135deg,#f5c451,#c9a03f,#f9dd86);
   -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 2px 14px rgba(109,40,217,.35));
+  filter:drop-shadow(0 2px 14px rgba(245,196,81,.35));
 }
 .logo-ko { font-size:16px; font-weight:900; letter-spacing:.02em; margin-top:7px; }
-.dark .logo-ko  { color:#ede9fe; }
-.light .logo-ko { color:#1a0f16; }
+.dark .logo-ko  { color:#f6ecd0; }
+.light .logo-ko { color:#1a1408; }
 .logo-tagline { font-size:9.5px; letter-spacing:.34em; text-transform:uppercase; margin-top:5px; font-weight:700; }
-.dark .logo-tagline  { color:rgba(196,181,253,.55); }
-.light .logo-tagline { color:rgba(109,40,217,.55); }
+.dark .logo-tagline  { color:rgba(249,221,134,.55); }
+.light .logo-tagline { color:rgba(245,196,81,.55); }
 
 /* 탭 */
 .tab-group {
@@ -179,8 +179,8 @@ const CSS = `
   transition:all .22s; font-family:'Noto Sans KR',sans-serif;
 }
 .tab-btn.active {
-  background:linear-gradient(135deg,#6d28d9,#5b21b6);
-  color:#000; box-shadow:0 4px 16px rgba(109,40,217,.35);
+  background:linear-gradient(135deg,#f5c451,#c9a03f);
+  color:#000; box-shadow:0 4px 16px rgba(245,196,81,.35);
   transform:translateY(-1px);
 }
 .dark .tab-btn.inactive  { background:transparent; color:rgba(255,235,244,.68); }
@@ -202,25 +202,25 @@ const CSS = `
 }
 .recent-email-item{ transition:background .13s; }
 .dark .recent-email-item:hover{ background:rgba(255,255,255,.08); }
-.light .recent-email-item:hover{ background:rgba(109,40,217,.09); }
+.light .recent-email-item:hover{ background:rgba(245,196,81,.09); }
 .recent-email-item:active{ transform:scale(.99); }
 .dark .field-input {
   background:rgba(255,255,255,.09);
-  border:1.5px solid rgba(167,139,250,.28);
+  border:1.5px solid rgba(230,180,70,.28);
   color:white;
 }
 .light .field-input {
   background:#faf8f3;
-  border:1.5px solid rgba(109,40,217,.15);
+  border:1.5px solid rgba(245,196,81,.15);
   color:#09090b;
 }
 .field-input::placeholder { opacity:.75; }
 .dark .field-input::placeholder  { color:rgba(255,255,255,.5); }
 .light .field-input::placeholder { color:#8a8072; }
 .field-input:focus {
-  border-color:rgba(109,40,217,.5) !important;
-  box-shadow:0 0 0 4px rgba(109,40,217,.08) !important;
-  background:rgba(109,40,217,.03) !important;
+  border-color:rgba(245,196,81,.5) !important;
+  box-shadow:0 0 0 4px rgba(245,196,81,.08) !important;
+  background:rgba(245,196,81,.03) !important;
 }
 
 /* 제출 버튼 */
@@ -229,7 +229,7 @@ const CSS = `
   border:none; border-radius:14px; cursor:pointer;
   font-family:'Noto Sans KR',sans-serif;
   font-size:15px; font-weight:800; letter-spacing:.03em;
-  background:linear-gradient(135deg,#6d28d9,#5b21b6,#5b21b6);
+  background:linear-gradient(135deg,#f5c451,#c9a03f,#c9a03f);
   background-size:200% 100%;
   color:#000; position:relative; overflow:hidden;
   transition:all .25s;
@@ -240,7 +240,7 @@ const CSS = `
   transform:translateX(-100%); transition:transform .5s;
 }
 .submit-btn:hover::before { transform:translateX(100%); }
-.submit-btn:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(109,40,217,.45); }
+.submit-btn:hover { transform:translateY(-2px); box-shadow:0 12px 32px rgba(245,196,81,.45); }
 .submit-btn:disabled { opacity:.45; cursor:not-allowed; transform:none; }
 
 /* 에러 */
@@ -254,9 +254,9 @@ const CSS = `
 /* 하단 장식 */
 .card-footer { display:flex; justify-content:center; align-items:center; gap:8px; margin-top:28px; }
 .footer-dot { width:5px; height:5px; border-radius:50%; }
-.dark .footer-dot  { background:rgba(109,40,217,.25); }
-.light .footer-dot { background:rgba(109,40,217,.2); }
-.footer-dot.active { background:#6d28d9 !important; box-shadow:0 0 8px rgba(109,40,217,.6); }
+.dark .footer-dot  { background:rgba(245,196,81,.25); }
+.light .footer-dot { background:rgba(245,196,81,.2); }
+.footer-dot.active { background:#f5c451 !important; box-shadow:0 0 8px rgba(245,196,81,.6); }
 
 /* 로더 */
 .btn-spin {
@@ -275,7 +275,7 @@ const CSS = `
 .find-links { display:flex; justify-content:center; gap:16px; margin-top:16px; }
 .find-link { background:none; border:none; cursor:pointer; font-size:12px; font-family:'Noto Sans KR',sans-serif; font-weight:600; letter-spacing:.03em; opacity:.55; transition:opacity .2s; text-decoration:underline; }
 .find-link:hover { opacity:1; }
-.dark .find-link  { color:rgba(196,181,253,.85); }
+.dark .find-link  { color:rgba(249,221,134,.85); }
 .light .find-link { color:rgba(0,0,0,.6); }
 
 /* 찾기 모달 오버레이 */
@@ -283,8 +283,8 @@ const CSS = `
 .dark .find-overlay  { background:rgba(0,0,0,.75); }
 .light .find-overlay { background:rgba(0,0,0,.45); }
 .find-modal { width:100%; max-width:400px; border-radius:24px; padding:32px 28px; animation:form-rise .3s ease both; }
-.dark .find-modal  { background:#0d1117; border:1px solid rgba(109,40,217,.15); }
-.light .find-modal { background:#fff; border:1px solid rgba(109,40,217,.2); box-shadow:0 24px 60px rgba(0,0,0,.15); }
+.dark .find-modal  { background:#0d1117; border:1px solid rgba(245,196,81,.15); }
+.light .find-modal { background:#fff; border:1px solid rgba(245,196,81,.2); box-shadow:0 24px 60px rgba(0,0,0,.15); }
 .find-title { font-size:18px; font-weight:900; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; }
 .dark .find-title  { color:#fff; }
 .light .find-title { color:#09090b; }
@@ -292,12 +292,47 @@ const CSS = `
 .dark .find-tabs  { background:rgba(255,255,255,.06); }
 .light .find-tabs { background:rgba(0,0,0,.06); }
 .find-tab { padding:9px; border:none; border-radius:9px; cursor:pointer; font-size:12px; font-weight:700; font-family:'Noto Sans KR',sans-serif; transition:all .2s; }
-.find-tab.active { background:linear-gradient(135deg,#6d28d9,#5b21b6); color:#000; }
+.find-tab.active { background:linear-gradient(135deg,#f5c451,#c9a03f); color:#000; }
 .dark .find-tab.inactive  { background:transparent; color:rgba(255,255,255,.4); }
 .light .find-tab.inactive { background:transparent; color:rgba(0,0,0,.4); }
 .find-result { margin-top:16px; padding:16px; border-radius:12px; font-size:14px; font-weight:700; text-align:center; line-height:1.6; }
-.dark .find-result  { background:rgba(109,40,217,.08); border:1px solid rgba(109,40,217,.2); color:#6d28d9; }
-.light .find-result { background:rgba(109,40,217,.06); border:1px solid rgba(109,40,217,.2); color:#5b21b6; }
+.dark .find-result  { background:rgba(245,196,81,.08); border:1px solid rgba(245,196,81,.2); color:#f5c451; }
+.light .find-result { background:rgba(245,196,81,.06); border:1px solid rgba(245,196,81,.2); color:#c9a03f; }
+
+/* 🌅 골든아워 배경 — 다크 위 금빛(골드가 또렷하게 뜨는 대비) */
+.golden-topbeam {
+  position:absolute; top:-12%; left:50%; width:72%; height:56%; transform:translateX(-50%);
+  pointer-events:none; filter:blur(8px);
+  background:radial-gradient(60% 100% at 50% 0%, rgba(255,224,138,.16) 0%, transparent 70%);
+}
+.golden-horizon {
+  position:absolute; left:0; right:0; bottom:0; height:50%; pointer-events:none;
+  background:radial-gradient(135% 92% at 50% 132%, rgba(245,196,81,.26) 0%, rgba(245,196,81,.08) 44%, transparent 74%);
+}
+/* 위로 떠오르는 금빛 씨앗 입자 = 초기 시딩이 velocity로 피어오르는 느낌 */
+@keyframes seed-rise {
+  0%{transform:translateY(0) scale(1);opacity:0}
+  12%{opacity:.95}
+  88%{opacity:.55}
+  100%{transform:translateY(-92vh) scale(.35);opacity:0}
+}
+.seed-particle {
+  position:absolute; bottom:-14px; border-radius:50%; will-change:transform;
+  background:radial-gradient(circle at 35% 32%,#ffeaa6,#f5c451 58%,#c9a03f);
+  box-shadow:0 0 10px rgba(245,196,81,.7);
+  animation:seed-rise linear infinite;
+}
+
+/* ☀️ 라이트 테마 골드 가독성 — 밝은 배경에선 골드 텍스트가 흐려짐 → 딥골드/브라운으로 대비 확보 */
+.light .top-brand   { background:linear-gradient(135deg,#b07d12,#7a5510); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.light .logo-name   { background:linear-gradient(135deg,#b8860b,#8a6510); -webkit-background-clip:text; -webkit-text-fill-color:transparent; filter:drop-shadow(0 1px 1px rgba(120,86,10,.22)); }
+.light .logo-tagline{ color:#96721e; }
+.light .logo-ko     { color:#3a2c0c; }
+.light .find-result { color:#7a5510; }
+/* 라이트: 골든아워 글로우를 살짝 진하게(크림 배경에서도 보이게) */
+.light .golden-horizon { background:radial-gradient(135% 92% at 50% 132%, rgba(224,168,40,.30) 0%, rgba(224,168,40,.10) 44%, transparent 74%); }
+.light .golden-topbeam { background:radial-gradient(60% 100% at 50% 0%, rgba(214,150,30,.16) 0%, transparent 70%); }
+.light .seed-particle  { box-shadow:0 0 9px rgba(200,150,40,.55); background:radial-gradient(circle at 35% 32%,#f7d36a,#e0a828 58%,#b8860b); }
 `;
 
 // 별 생성
@@ -315,6 +350,25 @@ function Stars({ count = 60 }: { count?: number }) {
           opacity: Math.random() * 0.6 + 0.2,
         } as any} />
       ))}
+    </>
+  );
+}
+
+// 🌱 위로 떠오르는 금빛 씨앗 입자 — 초기 시딩이 velocity로 피어오르는 골든아워 느낌
+function SeedParticles({ count = 16 }: { count?: number }) {
+  return (
+    <>
+      {Array.from({ length: count }, (_, i) => {
+        const size = Math.random() * 5 + 3;
+        return (
+          <div key={i} className="seed-particle" style={{
+            left: Math.random() * 100 + "%",
+            width: size + "px", height: size + "px",
+            animationDuration: (Math.random() * 8 + 8) + "s",
+            animationDelay: (Math.random() * 12) + "s",
+          }} />
+        );
+      })}
     </>
   );
 }
@@ -340,18 +394,18 @@ function PWAInstallBtn({ theme }: { theme: "dark" | "light" }) {
         position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)",
         display: "flex", alignItems: "center", gap: 8,
         padding: "12px 24px", borderRadius: 99,
-        background: "linear-gradient(135deg,#6d28d9,#5b21b6)",
+        background: "linear-gradient(135deg,#f5c451,#c9a03f)",
         color: "#000", fontWeight: 800, fontSize: 13,
         border: "none", cursor: "pointer", zIndex: 999,
         fontFamily: "'Noto Sans KR', sans-serif",
-        boxShadow: "0 8px 24px rgba(109,40,217,.45)",
+        boxShadow: "0 8px 24px rgba(245,196,81,.45)",
         animation: "pwa-bounce 2s ease-in-out infinite",
         whiteSpace: "nowrap",
       }}>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
         <path d="M12 2v13M7 11l5 5 5-5M3 19h18" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
-      Publy 앱 설치하기
+      퍼블리 골든시드 설치
     </button>
   );
 }
@@ -494,19 +548,22 @@ export default function LoginPage({ onLogin, onAdminLogin, theme, onThemeToggle 
     <>
       <style>{CSS}</style>
       <div className={`login-root ${theme}`}>
-        {/* 배경 */}
+        {/* 배경 — 🌅 골든아워: 다크 위 금빛 지평선 + 떠오르는 씨앗 입자 */}
         <div className="cosmos-bg">
+          <div className="golden-topbeam" />
           <div className="cosmos-orb cosmos-orb-1" />
           <div className="cosmos-orb cosmos-orb-2" />
           <div className="cosmos-orb cosmos-orb-3" />
-          <Stars count={80} />
+          <Stars count={50} />
+          <SeedParticles count={16} />
+          <div className="golden-horizon" />
           <div className="scan-line" />
         </div>
 
         {/* 상단 */}
         <div className="top-bar">
           <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-            <div className="top-brand">PUBLY TRAFFIC</div>
+            <div className="top-brand">PUBLY GOLDENSEED</div>
             {appVersion&&<span style={{fontSize:11,color:theme==="dark"?"rgba(255,255,255,.45)":"rgba(0,0,0,.48)",letterSpacing:".04em"}}>{appVersion.startsWith("v")?appVersion:`v${appVersion}`}</span>}
           </div>
           <div style={{ display: "flex", gap: 10 }}>
@@ -518,45 +575,27 @@ export default function LoginPage({ onLogin, onAdminLogin, theme, onThemeToggle 
         <div className="login-card">
           <div className="card-glow-line" />
 
-          {/* 로고 */}
-          <div className="logo-section" role="button" tabIndex={0} aria-label="퍼블리 로고" onClick={handleLogoTap} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") handleLogoTap(); }}>
+          {/* 로고 — 골든시드 'C' (골드 원 + 딥 다크 C로 대비 확실) */}
+          <div className="logo-section" role="button" tabIndex={0} aria-label="퍼블리 골든시드 로고" onClick={handleLogoTap} onKeyDown={e => { if (e.key === "Enter" || e.key === " ") handleLogoTap(); }}>
             <div className="logo-ring-wrap">
               <div className="logo-ring logo-ring-outer" />
               <div className="logo-ring logo-ring-inner" />
               <div className="logo-pulse" />
               <div className="logo-core">
-                <svg width="36" height="36" viewBox="0 0 192 192" xmlns="http://www.w3.org/2000/svg" style={{borderRadius:8}}>
-                  <defs>
-                    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#0a1628"/>
-                      <stop offset="100%" stopColor="#050a12"/>
-                    </linearGradient>
-                    <linearGradient id="g1" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#6d28d9"/>
-                      <stop offset="100%" stopColor="#5b21b6"/>
-                    </linearGradient>
-                    <filter id="glow">
-                      <feGaussianBlur stdDeviation="3" result="blur"/>
-                      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-                    </filter>
-                  </defs>
-                  <rect width="192" height="192" rx="36" fill="url(#bg)"/>
-                  <circle cx="96" cy="96" r="72" fill="none" stroke="#6d28d9" strokeWidth="1" opacity="0.12"/>
-                  <circle cx="96" cy="96" r="55" fill="none" stroke="#6d28d9" strokeWidth="1" opacity="0.08"/>
-                  <text x="96" y="122" fontFamily="Arial Black, sans-serif" fontSize="108" fontWeight="900" fill="url(#g1)" textAnchor="middle" filter="url(#glow)" letterSpacing="-4">T</text>
-                  <rect x="34" y="148" width="124" height="20" rx="10" fill="#6d28d9" opacity="0.12"/>
-                  <text x="96" y="163" fontFamily="Arial, sans-serif" fontSize="10.5" fontWeight="700" fill="#6d28d9" textAnchor="middle" letterSpacing="3.5">TRAFFIC</text>
+                <svg width="40" height="40" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  {/* 골드 원 위 딥브라운 C — 밝은 골드에서도 또렷 */}
+                  <text x="50" y="74" fontFamily="'Bebas Neue',Arial Black,sans-serif" fontSize="84" fontWeight="900" fill="#231a08" textAnchor="middle">C</text>
                 </svg>
               </div>
             </div>
-            <div className="logo-name">TRAFFIC</div>
-            <div className="logo-ko">퍼블리 트래픽</div>
-            <div className="logo-tagline">Traffic Inflow System</div>
+            <div className="logo-name">GOLDENSEED</div>
+            <div className="logo-ko">퍼블리 골든시드</div>
+            <div className="logo-tagline">Golden-Hour Seeding Engine</div>
           </div>
 
           {/* 초대 링크 배지 */}
           {refCode&&(
-            <div style={{marginBottom:16,padding:"8px 14px",borderRadius:10,background:"rgba(109,40,217,.08)",border:"1px solid rgba(109,40,217,.2)",fontSize:12,color:"#6d28d9",fontWeight:700,textAlign:"center"}}>
+            <div style={{marginBottom:16,padding:"8px 14px",borderRadius:10,background:"rgba(245,196,81,.08)",border:"1px solid rgba(245,196,81,.2)",fontSize:12,color:"#f5c451",fontWeight:700,textAlign:"center"}}>
               🎉 초대 링크로 접속했어요! 가입하면 쿼터 보너스가 지급돼요
             </div>
           )}
@@ -626,7 +665,7 @@ export default function LoginPage({ onLogin, onAdminLogin, theme, onThemeToggle 
                 value={phone} onChange={e => setPhone(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && handleSubmit()} />
               <div style={{marginTop:4,fontSize:10.5,lineHeight:1.5,paddingLeft:2,
-                color:theme==="dark"?"rgba(109,40,217,.7)":"rgba(109,40,217,.85)"}}>
+                color:theme==="dark"?"rgba(245,196,81,.7)":"rgba(245,196,81,.85)"}}>
                 💡 이메일·비밀번호 찾기에 필요해요
               </div>
             </div>

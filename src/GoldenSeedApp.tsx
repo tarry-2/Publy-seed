@@ -2,34 +2,29 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { PublyUser } from "./lib/supabase";
 import { botFetch } from "./lib/botApi";
 import SeedingCenter from "./components/SeedingCenter";
+import MascotBot from "./components/MascotBot";
 
 /* ───────────────────────────────────────────────────────────
    🌱 GoldenSeedApp — 골든시드 로그인 후 메인 셸.
-   트래픽(TrafficApp)의 컴팩트 셸 구조를 계승하되, 네이버 전용부
-   (OrderHome·InflowCenter·네이버 계정연결·대여 카운트다운)는 제거하고
-   본문을 시딩 콘솔(SeedingCenter)로 교체했다.
-   디자인 = 다크 럭셔리 + 골드(인플루언서 감성, SeedingCenter와 통일).
+   본문 = 시딩 콘솔(SeedingCenter). 라이트/다크 둘 다(가독성 배합).
+   디자인 = 다크 럭셔리 골드(인플루언서 감성) / 라이트 크림+딥골드.
 ─────────────────────────────────────────────────────────── */
 
 const YT_BOT = "http://localhost:3366";
 
-// SeedingCenter와 동일 팔레트(다크 골드) — 헤더/셸.
-const T = {
-  bg: "#08070b",
-  head: "linear-gradient(180deg,rgba(245,196,81,.08),transparent)",
-  panel: "#131019",
-  line: "#2a2436",
-  ink: "#f4efe4",
-  sub: "#9a9284",
-  gold: "#f5c451",
-  goldDim: "#c9a03f",
-  goldGlow: "rgba(245,196,81,.18)",
-};
+// 헤더/셸 팔레트 — 라이트/다크. 라이트는 골드가 흐려지지 않게 딥골드 사용.
+function palette(dark: boolean) {
+  return dark
+    ? { bg: "#08070b", head: "linear-gradient(180deg,rgba(245,196,81,.08),transparent)", panel: "#131019", line: "#2a2436", ink: "#f4efe4", sub: "#9a9284", gold: "#f5c451", goldDim: "#c9a03f", goldGlow: "rgba(245,196,81,.18)" }
+    : { bg: "#faf5ea", head: "linear-gradient(180deg,rgba(184,134,11,.10),transparent)", panel: "#fffdf7", line: "#e8dcc0", ink: "#2a2010", sub: "#8a7a52", gold: "#b8860b", goldDim: "#9a6f14", goldGlow: "rgba(184,134,11,.12)" };
+}
 const F_DISPLAY = "'Sora', ui-sans-serif, system-ui, sans-serif";
 
 type Props = { user: PublyUser; onLogout: () => void; onAdminLogin: () => void; theme: "light" | "dark"; onThemeToggle: () => void };
 
-export default function GoldenSeedApp({ user, onLogout, onAdminLogin }: Props) {
+export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onThemeToggle }: Props) {
+  const dark = theme === "dark";
+  const T = palette(dark);
   // ── 🌱 봇(youtube-bot 3366) 온라인 감지 — health는 봇 인증 뒤에 있어 botFetch(토큰) 사용 ──
   const [botOnline, setBotOnline] = useState(false);
   useEffect(() => {
@@ -75,20 +70,21 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin }: Props) {
 
       {/* 헤더 — 드래그로 창 이동(맥 hiddenInset). 좌측 78px=신호등 자리. 버튼·로고는 no-drag */}
       <div style={{ height: 48, flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "0 12px 0 78px", borderBottom: `1px solid ${T.line}`, background: T.head, ["WebkitAppRegion" as any]: "drag" }}>
-        <div onClick={onLogoTap} style={{ width: 30, height: 30, borderRadius: 9, background: `linear-gradient(135deg,${T.gold},${T.goldDim})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, boxShadow: `0 4px 14px ${T.goldGlow}`, cursor: "pointer", userSelect: "none", ["WebkitAppRegion" as any]: "no-drag" }}>🌱</div>
+        <div onClick={onLogoTap} style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", ["WebkitAppRegion" as any]: "no-drag" }}><MascotBot size={30} /></div>
         <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: ".01em", fontFamily: F_DISPLAY }}>GoldenSeed <small style={{ color: T.sub, fontWeight: 600, marginLeft: 5, fontSize: 11 }}>· 시딩 엔진{appVersion ? ` v${appVersion}` : ""}</small></div>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 99, background: "rgba(255,255,255,.03)", border: `1px solid ${T.line}`, fontSize: 10.5, fontWeight: 800, color: botOnline ? T.gold : T.sub }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: botOnline ? T.gold : "#dc2626", animation: botOnline ? "pulseGold 1.4s infinite" : "none" }} />{botOnline ? "봇 온라인" : "봇 오프라인"}
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", ["WebkitAppRegion" as any]: "no-drag" }}>
           <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>{user.name || user.email}</span>
+          <button onClick={onThemeToggle} title="라이트/다크" style={{ ...btn(T.panel, T.ink), padding: "6px 9px" }}>{dark ? "☀️" : "🌙"}</button>
           <button onClick={onLogout} style={btn(T.panel, T.sub)}>로그아웃</button>
         </div>
       </div>
 
       {/* 본문 = 시딩 콘솔. SeedingCenter가 자체적으로 봇 연동·상태·로그를 관리한다. */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <SeedingCenter showToast={showToast} />
+        <SeedingCenter showToast={showToast} theme={theme} />
       </div>
 
       {/* 토스트 */}
