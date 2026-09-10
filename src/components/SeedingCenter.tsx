@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { BotEventStream, botFetch } from "../lib/botApi";
 
 /* ───────────────────────────────────────────────────────────
    골든시드 시딩 컨트롤 (SeedingCenter)
@@ -48,7 +49,7 @@ export default function SeedingCenter({ showToast }: { showToast?: (m: string, t
     { t: Date.now(), kind: "sys", msg: "골든시드 시딩 콘솔 준비됨. 골든아워(첫 30분)에 시딩하세요." },
   ]);
   const [stats, setStats] = useState({ views: 0, success: 0, fail: 0 });
-  const esRef = useRef<EventSource | null>(null);
+  const esRef = useRef<BotEventStream | null>(null);
   const jobRef = useRef<string>("");
   const logEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -79,7 +80,9 @@ export default function SeedingCenter({ showToast }: { showToast?: (m: string, t
     pushLog("sys", `▶️ 조회 시딩 시작 — [${videoType}] ${gateway} 게이트웨이`);
 
     try {
-      const es = new EventSource(`${YT_BOT}/api/seed/view?${q}`);
+      // 봇은 BOT_AUTH_TOKEN(Bearer) 인증을 요구한다. native EventSource는 Authorization
+      //   헤더를 못 붙여 401 → 트래픽 InflowCenter처럼 BotEventStream(fetch 스트리밍)으로 토큰을 붙인다.
+      const es = new BotEventStream(`${YT_BOT}/api/seed/view?${q}`, { method: "GET" });
       esRef.current = es;
       es.onmessage = (ev) => {
         try {
@@ -97,10 +100,10 @@ export default function SeedingCenter({ showToast }: { showToast?: (m: string, t
           } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); stop(); }
         } catch {}
       };
-      es.onerror = () => {
-        pushLog("err", "⚠️ 봇 서버 연결 끊김 — youtube-bot(3366)이 실행 중인지 확인하세요.");
-        stop();
+      es.onerror = (detail) => {
+        pushLog("err", `⚠️ 봇 연결 실패 — ${detail || "youtube-bot(3366)이 실행 중인지 확인하세요."}`);
       };
+      es.onclose = () => { setRunning(false); };   // 스트림이 어떤 식으로 끝나도 버튼 잠금 해제
     } catch (e: any) {
       pushLog("err", `❌ 시작 실패: ${e.message}`);
       setRunning(false);
@@ -110,7 +113,8 @@ export default function SeedingCenter({ showToast }: { showToast?: (m: string, t
   function stop() {
     esRef.current?.close();
     esRef.current = null;
-    if (jobRef.current) fetch(`${YT_BOT}/api/stop/${jobRef.current}`, { method: "POST" }).catch(() => {});
+    // /api/stop도 봇 인증이 필요 → botFetch(Authorization 자동)로 호출(native fetch면 401).
+    if (jobRef.current) botFetch(`${YT_BOT}/api/stop/${jobRef.current}`, { method: "POST" }).catch(() => {});
     setRunning(false);
   }
 

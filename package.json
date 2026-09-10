@@ -7,9 +7,10 @@
     "dev": "vite",
     "build:web": "tsc --noEmit && vite build",
     "build:bots": "npm --prefix youtube-bot run build && npm --prefix insta-bot run build",
-    "build": "npm run build:web && npm run build:bots",
+    "build:electron": "tsc -p electron/tsconfig.json",
+    "build": "npm run build:web && npm run build:electron && npm run build:bots",
     "test:safety": "npm run build:bots && node scripts/test-account-lock.mjs && node scripts/test-place360-contract.mjs",
-    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\" \"cd youtube-bot && npm start\" \"cd insta-bot && npm start\"",
+    "electron:dev": "npm run build:electron && npm --prefix youtube-bot run build && concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
     "electron:build:win": "npm run build && electron-builder --win",
     "electron:build:mac": "npm run build && electron-builder --mac",
     "preview": "vite preview"

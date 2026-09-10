@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, powerSaveBlocker, dialog, Tray, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, shell, powerSaveBlocker, dialog, Tray, Menu, nativeImage } from "electron";
 import path from "path";
 import { spawn, exec as _exec, execSync, ChildProcess } from "child_process";
 import { randomBytes } from "crypto";
@@ -10,6 +10,7 @@ let botProcess: ChildProcess | null = null;
 let neighborBotProcess: ChildProcess | null = null;
 let instaBotProcess: ChildProcess | null = null;
 let backlinkBotProcess: ChildProcess | null = null;
+let youtubeBotProcess: ChildProcess | null = null;   // 🌱 골든시드 유튜브 시딩 봇(3366)
 
 // ── 봇 서버 워치독 등록부 ──
 // 각 봇 서버가 자신을 여기 등록한다. 주기적 health 체크가 "죽었거나 응답 없는(hung)"
@@ -331,7 +332,9 @@ function startBotWatchdog() {
 }
 
 const resourceDir = (rel: string) =>
-  isDev ? path.join(__dirname, "../../", rel) : path.join(process.resourcesPath, rel);
+  // dev: main.js는 goldenseed/dist-electron/ 에 있으므로 ../ 한 단계면 프로젝트 루트(봇 폴더 위치).
+  //   preload(__dirname/preload.js)·loadFile(__dirname/../dist)과 동일 기준. (기존 ../../ 는 goldenseed 밖을 가리켜 봇을 못 찾던 버그)
+  isDev ? path.join(__dirname, "../", rel) : path.join(process.resourcesPath, rel);
 
 async function startBotServer() {
   await forkBotServer({
@@ -362,11 +365,26 @@ async function startInstaBotServer() {
     name: "insta-bot",
     botPath: resourceDir("insta-bot"),
     chromiumPath: resourceDir("chromium"),
-    port: 3365,
-    // playwright는 naver-bot node_modules 공유
-    extraEnv: { NODE_PATH: path.join(resourceDir("naver-bot"), "node_modules") },
+    port: 3367,   // 🌱 골든시드 인스타 봇 — 트래픽 insta(3365)와 분리(3앱 동시)
+    // playwright는 naver-bot node_modules 공유. GS_INSTA_BOT_PORT를 명시 주입해
+    //   봇 실제 리슨 포트와 워치독 핑 포트(opts.port)를 일치시킨다(불일치=무한 재시작 방지).
+    extraEnv: { NODE_PATH: path.join(resourceDir("naver-bot"), "node_modules"), GS_INSTA_BOT_PORT: "3367" },
     getProc: () => instaBotProcess,
     setProc: p => { instaBotProcess = p; },
+  });
+}
+
+// 🌱 골든시드 유튜브 시딩 봇(3366) — SeedingCenter가 /api/seed/view(SSE)로 연동.
+async function startYoutubeBotServer() {
+  await forkBotServer({
+    name: "youtube-bot",
+    botPath: resourceDir("youtube-bot"),
+    chromiumPath: resourceDir("chromium"),
+    port: 3366,
+    // playwright는 naver-bot node_modules 공유. GS_YT_BOT_PORT 명시 주입(핑 포트 일치).
+    extraEnv: { NODE_PATH: path.join(resourceDir("naver-bot"), "node_modules"), GS_YT_BOT_PORT: "3366" },
+    getProc: () => youtubeBotProcess,
+    setProc: p => { youtubeBotProcess = p; },
   });
 }
 
@@ -425,11 +443,20 @@ function createWindow() {
 
 function createTray() {
   if (tray) return;
-  const iconPath = path.join(__dirname, process.platform === "darwin" ? "../dist/icon.icns" : "../dist/icon.ico");
-  tray = new Tray(iconPath);
-  tray.setToolTip("Publy · 예약 실행 중");
+  // 🌱 아이콘 로드는 방어적으로 — 아이콘 로드 실패로 Tray 생성이 통째로 죽으면
+  //   "화면 내려도 트레이에서 계속"(원칙 A)이 무너진다. nativeImage로 읽고, 트레이용은 22px로 리사이즈.
+  try {
+    const iconFile = path.join(__dirname, process.platform === "darwin" ? "../dist/icon.icns" : "../dist/icon.ico");
+    let img = nativeImage.createFromPath(iconFile);
+    if (!img.isEmpty() && process.platform === "darwin") img = img.resize({ width: 22, height: 22 });
+    tray = img.isEmpty() ? new Tray(nativeImage.createEmpty()) : new Tray(img);
+  } catch (e: any) {
+    console.warn("[tray] 아이콘 로드 실패, 빈 아이콘으로 진행:", e?.message);
+    tray = new Tray(nativeImage.createEmpty());
+  }
+  tray.setToolTip("골든시드 · 시딩 실행 중");
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: "퍼블리 열기", click: () => { if (!mainWindow) createWindow(); mainWindow?.show(); mainWindow?.focus(); } },
+    { label: "골든시드 열기", click: () => { if (!mainWindow) createWindow(); mainWindow?.show(); mainWindow?.focus(); } },
     { type: "separator" },
     { label: "완전히 종료", click: () => { app.isQuitting = true; app.quit(); } },
   ]));
@@ -463,6 +490,7 @@ app.whenReady().then(async () => {
   await startNeighborBotServer();
   await startInstaBotServer();
   await startBacklinkBotServer();
+  await startYoutubeBotServer();  // 🌱 골든시드 유튜브 시딩 봇(3366)
   startBotWatchdog();            // ★ 봇 서버 자동 감시·복구 시작
   createWindow();
   createTray();                  // 창을 닫아도 예약 실행은 트레이에서 계속
