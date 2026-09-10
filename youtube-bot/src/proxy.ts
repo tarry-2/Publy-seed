@@ -28,6 +28,17 @@ function normalizeServer(raw: string): string {
 }
 
 // gs_proxies에서 국적에 맞는 active 프록시 한 개 — assigned_count 적은 것 우선(부하 분산)
+// DataImpulse 국가 타겟팅 코드(username 끝 __cr.xx). kr→한국, foreign→미국(us) 기본.
+const NATION_CC: Record<"kr" | "foreign", string> = { kr: "kr", foreign: "us" };
+
+// username의 __cr.xx 국가코드를 원하는 국적으로 교체(없으면 붙임). DataImpulse 전용.
+function applyCountry(username: string | undefined, nationality: "kr" | "foreign"): string | undefined {
+  if (!username) return username;
+  const cc = NATION_CC[nationality];
+  const base = username.replace(/__cr\.[a-z]{2}/i, "");  // 기존 __cr.xx 제거
+  return `${base}__cr.${cc}`;
+}
+
 export async function getProxyForNationality(nationality: "kr" | "foreign"): Promise<ProxyConfig | null> {
   const key = `nat_${nationality}`;
   const hit = _cache.get(key);
@@ -35,6 +46,7 @@ export async function getProxyForNationality(nationality: "kr" | "foreign"): Pro
 
   let proxy: ProxyConfig | null = null;
   try {
+    // gs_proxies에 국가별 프록시가 등록돼 있으면 그걸 우선(country 매칭)
     let q = supabase.from("gs_proxies").select("host,port,username,password,country,status").eq("status", "active");
     q = nationality === "kr" ? q.eq("country", "KR") : q.neq("country", "KR");
     const { data } = await q.order("assigned_count", { ascending: true }).limit(1).maybeSingle();
@@ -47,8 +59,12 @@ export async function getProxyForNationality(nationality: "kr" | "foreign"): Pro
     }
   } catch {}
 
-  // 폴백: gs_proxies에 없으면 publy_settings.default_inflow_proxy(트래픽과 동일 키)
-  if (!proxy) proxy = await getDefaultProxy();
+  // 폴백: gs_proxies에 없으면 default_inflow_proxy(트래픽과 동일 DataImpulse 1계정) →
+  //   국적에 맞게 username의 __cr.xx 국가코드만 바꿔 한국/외국 IP를 낸다(프록시 여러개 불필요).
+  if (!proxy) {
+    const def = await getDefaultProxy();
+    if (def) proxy = { ...def, username: applyCountry(def.username, nationality) };
+  }
 
   _cache.set(key, { proxy, ts: Date.now() });
   return proxy;

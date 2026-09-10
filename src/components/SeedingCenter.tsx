@@ -133,6 +133,14 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
 
+    // 🔴 인스타는 봇 미구현(STEP2+, 계정 로그인 필요) → 유튜브 봇으로 보내면 안 됨.
+    if (platform === "instagram") {
+      pushLog("sys", "ℹ️ 인스타 시딩은 준비 중이에요(STEP2). 인스타는 로그인 계정이 있어야 해서, 계정 시스템이 붙은 뒤 열립니다. 지금은 유튜브 조회 시딩만 실행돼요.");
+      picked.forEach((d) => pushLog("log", `⏳ ${d.icon} ${d.label} ×${actions[d.id].qty} — 인스타 계정 연결 후 실행`));
+      setRunning(false);
+      return;
+    }
+
     // 조회(view)만 실제 봇 연동(STEP1). 나머지는 계정 붙는대로 순차 연결.
     if (actions["view"]?.on) {
       const q = new URLSearchParams({
