@@ -39,7 +39,7 @@ const CSS = `
   position:relative; font-family:'Noto Sans KR',sans-serif;
   perspective:1000px;
 }
-.login-root.dark  { background:radial-gradient(1200px 800px at 20% 0%, #1c1608 0%, #140f08 55%, #08070b 100%); }
+.login-root.dark  { background:radial-gradient(1200px 800px at 50% -8%, #33280f 0%, #1c1608 46%, #0c0906 100%); }
 .login-root.light { background:radial-gradient(1200px 800px at 20% 0%, #fdf6e3 0%, #f9f2df 55%, #f5efe0 100%); }
 
 /* 우주 배경 */
@@ -155,16 +155,17 @@ const CSS = `
 }
 .logo-name {
   font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:.24em; line-height:1;
-  background:linear-gradient(135deg,#f5c451,#c9a03f,#f9dd86);
+  /* 다크에서 흐리지 않게 밝은 골드 위주 그라데 + 글로우 강화 */
+  background:linear-gradient(135deg,#ffe9a8,#f5c451 55%,#e8b84a);
   -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 2px 14px rgba(245,196,81,.35));
+  filter:drop-shadow(0 2px 16px rgba(245,196,81,.55));
 }
 .logo-ko { font-size:16px; font-weight:900; letter-spacing:.02em; margin-top:7px; }
-.dark .logo-ko  { color:#f6ecd0; }
+.dark .logo-ko  { color:#fbf3dc; }
 .light .logo-ko { color:#1a1408; }
 .logo-tagline { font-size:9.5px; letter-spacing:.34em; text-transform:uppercase; margin-top:5px; font-weight:700; }
-.dark .logo-tagline  { color:rgba(249,221,134,.55); }
-.light .logo-tagline { color:rgba(245,196,81,.55); }
+.dark .logo-tagline  { color:rgba(255,224,138,.85); }
+.light .logo-tagline { color:rgba(154,111,20,.9); }
 
 /* 탭 */
 .tab-group {
