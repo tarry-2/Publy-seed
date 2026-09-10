@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { PublyUser } from "./lib/supabase";
 import { botFetch } from "./lib/botApi";
 import SeedingCenter from "./components/SeedingCenter";
-import MascotBot from "./components/MascotBot";
 
 /* ───────────────────────────────────────────────────────────
    🌱 GoldenSeedApp — 골든시드 로그인 후 메인 셸.
@@ -70,7 +69,10 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
 
       {/* 헤더 — 드래그로 창 이동(맥 hiddenInset). 좌측 78px=신호등 자리. 버튼·로고는 no-drag */}
       <div style={{ height: 48, flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "0 12px 0 78px", borderBottom: `1px solid ${T.line}`, background: T.head, ["WebkitAppRegion" as any]: "drag" }}>
-        <div onClick={onLogoTap} style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", ["WebkitAppRegion" as any]: "no-drag" }}><MascotBot size={30} /></div>
+        {/* 로고 C — 인라인(이미지 경로 X, Electron file:// 에서도 안 깨짐) */}
+        <div onClick={onLogoTap} style={{ width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center", background: "linear-gradient(135deg,#f9dd86,#f5c451 55%,#c9a03f)", boxShadow: `0 4px 12px ${T.goldGlow}`, cursor: "pointer", userSelect: "none", ["WebkitAppRegion" as any]: "no-drag" }}>
+          <span style={{ fontFamily: "'Bebas Neue',Arial Black,sans-serif", fontSize: 22, fontWeight: 900, color: "#231a08", lineHeight: 1, marginTop: 1 }}>C</span>
+        </div>
         <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: ".01em", fontFamily: F_DISPLAY }}>GoldenSeed <small style={{ color: T.sub, fontWeight: 600, marginLeft: 5, fontSize: 11 }}>· 시딩 엔진{appVersion ? ` v${appVersion}` : ""}</small></div>
         <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 99, background: "rgba(255,255,255,.03)", border: `1px solid ${T.line}`, fontSize: 10.5, fontWeight: 800, color: botOnline ? T.gold : T.sub }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: botOnline ? T.gold : "#dc2626", animation: botOnline ? "pulseGold 1.4s infinite" : "none" }} />{botOnline ? "봇 온라인" : "봇 오프라인"}
