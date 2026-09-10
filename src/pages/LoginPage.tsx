@@ -155,10 +155,9 @@ const CSS = `
 }
 .logo-name {
   font-family:'Bebas Neue',sans-serif; font-size:30px; letter-spacing:.24em; line-height:1;
-  /* 다크에서 흐리지 않게 밝은 골드 위주 그라데 + 글로우 강화 */
-  background:linear-gradient(135deg,#ffe9a8,#f5c451 55%,#e8b84a);
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
-  filter:drop-shadow(0 2px 16px rgba(245,196,81,.55));
+  /* ★그라데(background-clip:text)는 모바일서 발색이 죽어 흐림 → 테마별 단색으로 확실한 대비 */
+  color:#ffd968; -webkit-text-fill-color:#ffd968;
+  text-shadow:0 1px 10px rgba(245,196,81,.5);
 }
 .logo-ko { font-size:16px; font-weight:900; letter-spacing:.02em; margin-top:7px; }
 .dark .logo-ko  { color:#fbf3dc; }
@@ -326,7 +325,7 @@ const CSS = `
 
 /* ☀️ 라이트 테마 골드 가독성 — 밝은 배경에선 골드 텍스트가 흐려짐 → 딥골드/브라운으로 대비 확보 */
 .light .top-brand   { background:linear-gradient(135deg,#b07d12,#7a5510); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
-.light .logo-name   { background:linear-gradient(135deg,#b8860b,#8a6510); -webkit-background-clip:text; -webkit-text-fill-color:transparent; filter:drop-shadow(0 1px 1px rgba(120,86,10,.22)); }
+.light .logo-name   { color:#9a6f14; -webkit-text-fill-color:#9a6f14; text-shadow:none; }
 .light .logo-tagline{ color:#96721e; }
 .light .logo-ko     { color:#3a2c0c; }
 .light .find-result { color:#7a5510; }
