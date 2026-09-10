@@ -48,7 +48,7 @@ app.post("/api/stop/:jobId", (req, res) => {
         watchSeconds?, proxyServer?, proxyUser?, proxyPass?, jobId? */
 app.get("/api/seed/view", async (req, res) => {
   const {
-    videoUrl, videoType, gateway, watchSeconds,
+    videoUrl, videoType, gateway, watchSeconds, nationality, headful,
     proxyServer, proxyUser, proxyPass, jobId,
   } = req.query as Record<string, string>;
 
@@ -67,6 +67,8 @@ app.get("/api/seed/view", async (req, res) => {
       videoUrl,
       videoType: videoType === "longform" ? "longform" : "shorts",
       gateway: (gateway as "instagram" | "facebook" | "direct") || "instagram",
+      nationality: nationality === "foreign" ? "foreign" : "kr",
+      headful: headful === "1",
       proxy,
       watchSeconds: watchSeconds ? parseInt(watchSeconds, 10) : undefined,
       onLog: (msg) => sseSend(res, { type: "log", msg }),

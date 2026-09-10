@@ -560,10 +560,17 @@ export default function LoginPage({ onLogin, onAdminLogin, theme, onThemeToggle 
           <div className="scan-line" />
         </div>
 
-        {/* 상단 */}
+        {/* 상단 — 큰 C 로고(브랜드 텍스트 대신) */}
         <div className="top-bar">
-          <div style={{display:"flex",alignItems:"baseline",gap:8}}>
-            <div className="top-brand">PUBLY GOLDENSEED</div>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{
+              width:52, height:52, borderRadius:16, display:"grid", placeItems:"center",
+              background:"linear-gradient(135deg,#f9dd86,#f5c451 52%,#c9a03f)",
+              boxShadow: theme==="dark" ? "0 6px 22px rgba(245,196,81,.35)" : "0 6px 18px rgba(184,134,11,.28)",
+              border: theme==="dark" ? "1px solid rgba(255,243,207,.5)" : "1px solid rgba(255,243,207,.8)",
+            }}>
+              <span style={{fontFamily:"'Bebas Neue',Arial Black,sans-serif", fontSize:40, fontWeight:900, color:"#231a08", lineHeight:1, marginTop:2}}>C</span>
+            </div>
             {appVersion&&<span style={{fontSize:11,color:theme==="dark"?"rgba(255,255,255,.45)":"rgba(0,0,0,.48)",letterSpacing:".04em"}}>{appVersion.startsWith("v")?appVersion:`v${appVersion}`}</span>}
           </div>
           <div style={{ display: "flex", gap: 10 }}>

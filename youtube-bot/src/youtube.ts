@@ -1,6 +1,7 @@
 import { chromium, BrowserContext, Page } from "playwright";
 import path from "path";
 import { hasSession, readSession, writeSession } from "./session-store";
+import { ProxyConfig as PxConfig, getProxyForNationality, stickifyDataImpulse, maskProxy } from "./proxy";
 
 // ─────────────────────────────────────────────────────────────
 //  youtube-bot — 골든시드 유튜브 시딩 (insta-bot 패턴 재활용)
@@ -73,10 +74,11 @@ async function newContext(opts: {
   proxy?: ProxyConfig;
   withSession?: boolean;
   accountId?: string;
+  headful?: boolean;   // 🚪 창 보기(true=창 표시, false=headless)
 }): Promise<{ browser: any; context: BrowserContext }> {
   const ua = GATEWAY_UA[opts.gateway] || GATEWAY_UA.direct;
   const browser = await chromium.launch({
-    headless: false,
+    headless: opts.headful === false,   // 창보기 OFF면 headless로(백그라운드), 기본은 창 표시
     args: LAUNCH_ARGS,
     slowMo: 30,
     proxy: opts.proxy
@@ -145,36 +147,51 @@ export async function seedView(params: {
   videoUrl: string;
   videoType: "shorts" | "longform";
   gateway: "instagram" | "facebook" | "direct";
-  proxy?: ProxyConfig;
+  nationality?: "kr" | "foreign";   // 국적 → 프록시 국가 매칭
+  proxy?: ProxyConfig;              // 명시 프록시(있으면 우선). 없으면 nationality로 조회
+  headful?: boolean;               // 🚪 창 보기
   watchSeconds?: number; // 롱폼 목표 시청 초(기본 60)
   onLog: (msg: string) => void;
   stopSignal: () => boolean;
 }): Promise<{ status: "success" | "fail"; watchedSeconds: number; error?: string }> {
-  const { videoUrl, videoType, gateway, proxy, onLog, stopSignal } = params;
+  const { videoUrl, videoType, gateway, nationality = "kr", onLog, stopSignal } = params;
   const referer = GATEWAY_REFERRER[gateway] || "";
-  const { browser, context } = await newContext({ gateway, proxy });
+
+  // ── [1/8] 프록시 결정 — 국적 매칭 + DataImpulse sticky(방문당 IP 고정) ──
+  onLog(`[1/8] 🌐 프록시 준비 — ${nationality === "kr" ? "🇰🇷 한국" : "🌍 해외"} IP 조회 중…`);
+  let proxy: PxConfig | null = params.proxy || (await getProxyForNationality(nationality));
+  proxy = stickifyDataImpulse(proxy);
+  if (proxy) onLog(`[2/8] 🔒 프록시 사용 — 내 실제 IP를 가리고 ${maskProxy(proxy)} 로 접속(방문 동안 IP 고정)`);
+  else onLog(`[2/8] ⚠️ 프록시 미배정 — 내 실제 IP로 접속(차단 위험). gs_proxies에 등록하면 안전해져요`);
+
+  const { browser, context } = await newContext({ gateway, proxy: proxy || undefined, headful: params.headful });
   const page = await context.newPage();
   let watched = 0;
   try {
-    onLog(`▶️ [${videoType}] ${gateway} 게이트웨이로 진입 (${proxy ? "프록시 O" : "프록시 X"})`);
+    const gwLabel = gateway === "instagram" ? "인스타" : gateway === "facebook" ? "페북" : "직접";
+    onLog(`[3/8] 🧭 게이트웨이 = ${gwLabel} referrer(${referer || "없음"}) + 인앱 UA — "소셜에서 넘어온 유입"으로 위장`);
+    onLog(`[4/8] ▶️ 영상 진입 중… [${videoType === "shorts" ? "쇼츠" : "롱폼"}]`);
     // 게이트웨이 referrer 달고 영상 진입 = "소셜에서 넘어온 유입"으로 인식
     await page.goto(videoUrl, {
       waitUntil: "domcontentloaded",
       timeout: 30000,
       referer: referer || undefined,
     });
+    onLog(`[5/8] 📄 페이지 로드됨 — 동의/광고 팝업 정리 중…`);
     await page.waitForTimeout(humanDelayMs(1.5, 3));
     await dismissConsent(page);
     await trySkipAd(page);
-    await ensurePlaying(page);
+    const dur = await ensurePlaying(page);
+    onLog(`[6/8] ▶️ 재생 시작 (영상 길이 ${dur ? Math.round(dur) + "s" : "불명"}) — 시청 시작`);
 
     if (videoType === "shorts") {
       // 쇼츠: 짧으니 완주 + 루프(1~2회) = 완주율/재시청 신호
       const loops = 1 + Math.round(Math.random());
+      onLog(`[7/8] ⏱️ 쇼츠 완주 시딩 — ${loops}회 완주(완주율 신호) 시작`);
       for (let i = 0; i < loops; i++) {
-        if (stopSignal()) break;
-        const dur = (await ensurePlaying(page)) || 20;
-        const watchMs = Math.min(dur, 60) * 1000 + humanDelayMs(0.5, 2);
+        if (stopSignal()) { onLog(`  ⏹ 중단 신호 감지 — 이번 방문 정리`); break; }
+        const d = (await ensurePlaying(page)) || 20;
+        const watchMs = Math.min(d, 60) * 1000 + humanDelayMs(0.5, 2);
         await sleep(watchMs);
         watched += Math.round(watchMs / 1000);
         onLog(`  ⏱️ 완주 ${i + 1}/${loops} (누적 ${watched}s)`);
@@ -182,20 +199,21 @@ export async function seedView(params: {
     } else {
       // 롱폼: 목표 시청초까지 나눠서 체류(첫 구간 이탈 방지). watch time이 핵심
       const target = params.watchSeconds ?? 60;
+      onLog(`[7/8] ⏱️ 롱폼 watch time 시딩 — 목표 ${target}s 체류(첫 구간 이탈 방지) 시작`);
       let elapsed = 0;
       while (elapsed < target) {
-        if (stopSignal()) break;
+        if (stopSignal()) { onLog(`  ⏹ 중단 신호 감지 — 이번 방문 정리`); break; }
         const chunk = Math.min(target - elapsed, 10 + Math.random() * 15);
         await sleep(chunk * 1000);
         elapsed += chunk;
         watched = Math.round(elapsed);
         // 가끔 자연스러운 미세 스크롤(사람다움)
         if (Math.random() < 0.3) await page.mouse.wheel(0, 80 + Math.random() * 120).catch(() => {});
-        onLog(`  ⏱️ 시청 ${watched}/${target}s`);
+        onLog(`  ⏱️ 시청 ${watched}/${target}s (${Math.round((watched / target) * 100)}%)`);
       }
     }
 
-    onLog(`✅ 조회 시딩 완료 (watch ${watched}s)`);
+    onLog(`[8/8] ✅ 조회 시딩 완료 — watch ${watched}s (velocity 1건 확보)`);
     await browser.close().catch(() => {});
     return { status: "success", watchedSeconds: watched };
   } catch (e: any) {

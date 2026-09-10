@@ -39,3 +39,5 @@ neighbor-bot/naver_state.json
 scripts/login-*.png
 scripts/seeding-*.png
 scripts/mascot.png
+scripts/e2e-*.png
+scripts/top-*.png
