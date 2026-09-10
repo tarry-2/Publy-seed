@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#6d28d9" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="골든시드" />
+    <meta name="description" content="골든시드 — 콘텐츠 초기 노출을 부스팅하는 성장 도구." />
+
+    <!-- 링크 공유 미리보기 (Open Graph / 카카오톡·페이스북 등) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GoldenSeed" />
+    <meta property="og:locale" content="ko_KR" />
+    <!-- TODO: 골든시드 도메인/OG 이미지 정해지면 og:url·og:image 교체 -->
+    <meta property="og:title" content="GoldenSeed — 콘텐츠 초기 노출 부스팅" />
+    <meta property="og:description" content="골든시드 — 콘텐츠 초기 노출을 부스팅하는 성장 도구." />
+    <meta property="og:image" content="https://publy.blogautopro.com/og.png?v=1" />
+    <meta property="og:image:secure_url" content="https://publy.blogautopro.com/og.png?v=1" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="PUBLY — 블로그 글 AI 자동발행" />
+
+    <!-- 트위터 카드 -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="GoldenSeed — 콘텐츠 초기 노출 부스팅" />
+    <meta name="twitter:description" content="골든시드 — 콘텐츠 초기 노출을 부스팅하는 성장 도구." />
+    <meta name="twitter:image" content="https://publy.blogautopro.com/og.png?v=1" />
+
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <title>골든시드</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      input, textarea, select { -webkit-user-select: text !important; user-select: text !important; }
+      /* 최초 라이트 배경(검은 화면 방지) — 앱 열자마자 밝게 + 로딩 스피너 */
+      body { overflow: hidden; background: #f3eef2; padding-top: env(safe-area-inset-top); }
+      #boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #f3eef2; z-index: 1; }
+      #boot .s { width: 42px; height: 42px; border-radius: 50%; border: 3px solid rgba(109,40,217,.2); border-top-color: #6d28d9; animation: bspin .8s linear infinite; }
+      @keyframes bspin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <!-- React 마운트 전 즉시 보이는 로딩(검은 화면 대신). 앱 뜨면 root가 덮어써 사라짐 -->
+    <div id="boot"><div class="s"></div></div>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(r => console.log('[PWA] SW 등록됨', r.scope))
+            .catch(e => console.log('[PWA] SW 실패', e));
+        });
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,123 @@
+{
+  "name": "goldenseed",
+  "version": "0.1.0",
+  "description": "골든시드(GoldenSeed) - 유튜브/인스타 골든아워 초기시딩 엔진",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build:web": "tsc --noEmit && vite build",
+    "build:bots": "npm --prefix youtube-bot run build && npm --prefix insta-bot run build",
+    "build": "npm run build:web && npm run build:bots",
+    "test:safety": "npm run build:bots && node scripts/test-account-lock.mjs && node scripts/test-place360-contract.mjs",
+    "electron:dev": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\" \"cd youtube-bot && npm start\" \"cd insta-bot && npm start\"",
+    "electron:build:win": "npm run build && electron-builder --win",
+    "electron:build:mac": "npm run build && electron-builder --mac",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.5",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vercel/node": "^9.0.1",
+    "@vitejs/plugin-react": "^4.2.1",
+    "concurrently": "^8.2.2",
+    "electron": "^29.1.4",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.4.2",
+    "vite": "^5.2.0",
+    "vite-plugin-electron": "^0.28.4",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.goldenseed.app",
+    "productName": "GoldenSeed",
+    "copyright": "Copyright © 2026 GoldenSeed",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "youtube-bot/dist",
+        "to": "youtube-bot/dist"
+      },
+      {
+        "from": "youtube-bot/node_modules",
+        "to": "youtube-bot/node_modules"
+      },
+      {
+        "from": "insta-bot/dist",
+        "to": "insta-bot/dist"
+      },
+      {
+        "from": "insta-bot/node_modules",
+        "to": "insta-bot/node_modules"
+      },
+      {
+        "from": "chromium",
+        "to": "chromium"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "public/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "public/icon.ico",
+      "installerHeaderIcon": "public/icon.ico",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "골든시드"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "icon": "public/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
+    }
+  }
+}
