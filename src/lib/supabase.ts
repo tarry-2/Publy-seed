@@ -2236,21 +2236,21 @@ export const GS_PLAN_LABEL: Record<GsPlan, string> = { basic: "베이직", pro: 
 //   테리 실전 기준값(조회 300 : 좋아요 10 : 댓글 10)을 베이직으로, 등급 오를수록 증량.
 export const GS_PLAN_LIMITS: Record<"youtube" | "instagram", Record<string, Record<GsPlan, number>>> = {
   youtube: {
-    view:      { basic: 300, pro: 1000, premium: 3000, unlimited: 0 },
-    watch:     { basic: 100, pro: 400,  premium: 1200, unlimited: 0 },
-    like:      { basic: 10,  pro: 40,   premium: 120,  unlimited: 0 },
-    comment:   { basic: 10,  pro: 30,   premium: 80,   unlimited: 0 },
-    subscribe: { basic: 5,   pro: 20,   premium: 60,   unlimited: 0 },
-    share:     { basic: 8,   pro: 30,   premium: 90,   unlimited: 0 },
+    view:      { basic: 150, pro: 500,  premium: 1500, unlimited: 0 }, // 테리 지정
+    watch:     { basic: 50,  pro: 200,  premium: 600,  unlimited: 0 }, // 반으로
+    like:      { basic: 10,  pro: 30,   premium: 100,  unlimited: 0 }, // 테리 지정
+    comment:   { basic: 10,  pro: 30,   premium: 80,   unlimited: 0 }, // 그대로
+    subscribe: { basic: 5,   pro: 15,   premium: 45,   unlimited: 0 }, // 반으로
+    share:     { basic: 5,   pro: 15,   premium: 45,   unlimited: 0 }, // 반으로
   },
   instagram: {
-    view:    { basic: 300, pro: 1000, premium: 3000, unlimited: 0 },
-    like:    { basic: 10,  pro: 40,   premium: 120,  unlimited: 0 },
-    comment: { basic: 10,  pro: 30,   premium: 80,   unlimited: 0 },
-    follow:  { basic: 5,   pro: 20,   premium: 60,   unlimited: 0 },
-    share:   { basic: 12,  pro: 40,   premium: 120,  unlimited: 0 },
-    repost:  { basic: 2,   pro: 6,    premium: 15,   unlimited: 0 },
-    save:    { basic: 8,   pro: 30,   premium: 90,   unlimited: 0 },
+    view:    { basic: 150, pro: 500,  premium: 1500, unlimited: 0 }, // 테리 지정
+    like:    { basic: 10,  pro: 30,   premium: 100,  unlimited: 0 }, // 테리 지정
+    comment: { basic: 10,  pro: 30,   premium: 80,   unlimited: 0 }, // 그대로
+    follow:  { basic: 5,   pro: 15,   premium: 45,   unlimited: 0 }, // 반으로
+    share:   { basic: 6,   pro: 20,   premium: 60,   unlimited: 0 }, // 반으로
+    repost:  { basic: 2,   pro: 5,    premium: 12,   unlimited: 0 }, // 반으로
+    save:    { basic: 5,   pro: 15,   premium: 45,   unlimited: 0 }, // 반으로
   },
 };
 // 📨 회원 → 관리자 로그 전송(traffic_logs). 관리자는 컨트롤타워에서 빨간 알림으로 확인.
