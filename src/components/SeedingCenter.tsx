@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { BotEventStream, botFetch } from "../lib/botApi";
 import MascotBot from "./MascotBot";
 import MonetizeCoach from "./MonetizeCoach";
+import YtApiKeyBox from "./YtApiKeyBox";
+import { ytChannelStats, ytVideoViews } from "../lib/youtubeApi";
 import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GsPlan } from "../lib/supabase";
 
 /* ───────────────────────────────────────────────────────────
@@ -209,6 +211,21 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   const [sortOrder, setSortOrder] = useState<"recent" | "old">("recent");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const chanEsRef = useRef<BotEventStream | null>(null);
+  // 🌱 골든시드가 시딩한 기여분(에너지바 실시간 반영용). 채널 새로 불러오면 리셋(실측이 최신이므로).
+  const SEED_KEY = `gs_seeded_${platform}`;
+  const [seeded, setSeeded] = useState<{ shortsViews: number; watchSeconds: number }>(() => {
+    try { return JSON.parse(localStorage.getItem(SEED_KEY) || '{"shortsViews":0,"watchSeconds":0}'); } catch { return { shortsViews: 0, watchSeconds: 0 }; }
+  });
+  const bumpSeeded = (patch: { shortsViews?: number; watchSeconds?: number }) => setSeeded((s) => {
+    const n = { shortsViews: s.shortsViews + (patch.shortsViews || 0), watchSeconds: s.watchSeconds + (patch.watchSeconds || 0) };
+    try { localStorage.setItem(SEED_KEY, JSON.stringify(n)); } catch {}
+    return n;
+  });
+  const resetSeeded = () => { setSeeded({ shortsViews: 0, watchSeconds: 0 }); try { localStorage.setItem(SEED_KEY, '{"shortsViews":0,"watchSeconds":0}'); } catch {} };
+  // 🔑 YouTube Data API 키(유튜브 전용, localStorage) — 있으면 구독자·조회수 실측 갱신
+  const [ytApiKey, setYtApiKey] = useState<string>(() => { try { return localStorage.getItem("gs_yt_api_key") || ""; } catch { return ""; } });
+  const saveYtApiKey = (k: string) => { setYtApiKey(k); try { k ? localStorage.setItem("gs_yt_api_key", k) : localStorage.removeItem("gs_yt_api_key"); } catch {} };
+  const [apiLive, setApiLive] = useState(false);   // API로 실측 갱신됨(게이지 "실시간" 표기)
   // 입력한 채널 주소는 즉시 영속(다시 안 쳐도 됨)
   useEffect(() => { try { localStorage.setItem(`${CHAN_KEY}_url`, channelUrl); } catch {} }, [channelUrl, CHAN_KEY]);
   // 💾 저장한 내 계정(채널) 목록 — 삭제 전엔 안 사라짐(유튜브·인스타 공용, 플랫폼별)
@@ -398,6 +415,11 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
           else if (d.type === "seed_done") {
             pushLog(d.status === "success" ? "ok" : "err", d.status === "success" ? `✅ 조회 완료 (watch ${d.watchedSeconds}s)` : `❌ 실패: ${d.error || ""}`);
             setStats((s) => ({ views: s.views + (d.status === "success" ? 1 : 0), success: s.success + (d.status === "success" ? 1 : 0), fail: s.fail + (d.status === "success" ? 0 : 1) }));
+            // 🌱 에너지바 실시간 반영: 쇼츠=조회+1, 롱폼=시청초 누적
+            if (d.status === "success") {
+              if (video.type === "shorts") bumpSeeded({ shortsViews: 1 });
+              else bumpSeeded({ watchSeconds: d.watchedSeconds || 0 });
+            }
             finish();
           } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); finish(); }
         } catch {}
@@ -415,7 +437,7 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     if (target && target !== channelUrl) setChannelUrl(target);
     // 불러온 계정은 자동 저장(사용자가 삭제 전엔 안 사라짐)
     if (!savedChannels.includes(u)) persistChannels([u, ...savedChannels].slice(0, 30));
-    setChannelLoading(true);
+    setChannelLoading(true); setApiLive(false);
     setChannelVideos([]); setSelectedIds(new Set()); setChannelSubs(undefined);
     pushLog("sys", `📺 채널 불러오기 시작 — ${u} (RSS+스크래핑 혼합, 오래 걸릴 수 있어요)`);
     const q = new URLSearchParams({ channelUrl: u, nationality });
@@ -432,6 +454,7 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
           setChannelVideos(vids);
           setChannelSubs(d.subscribers);
           const at = Date.now(); setChannelLoadedAt(at);
+          resetSeeded();   // 유튜브 실측이 최신 = 시딩 누적분은 이미 반영됨 → 0부터 다시
           // 결과 스냅샷 영속 — 크래시/재시작해도 리스트·수익화 진단 유지
           try {
             localStorage.setItem(`${CHAN_KEY}_vids`, JSON.stringify(vids));
@@ -442,6 +465,24 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
           setSelectedIds(new Set(golden));   // 골든아워(30분 이내) 자동 선택
           const nShorts = vids.filter((v) => v.type === "shorts").length;
           pushLog("ok", `✅ ${vids.length}개 불러옴 (쇼츠 ${nShorts}·롱폼 ${vids.length - nShorts})${d.subscribers != null ? ` · 구독자 ${Number(d.subscribers).toLocaleString()}` : ""}${golden.length ? ` · 🔥골든아워 ${golden.length}개 자동선택` : ""}`);
+          // 🔑 API 키 있으면 구독자·조회수를 유튜브 실측값으로 갱신(비동기, 스크래핑 값 위에 덮어씀)
+          if (ytApiKey && d.channelId) {
+            pushLog("log", "🔑 YouTube API로 구독자·조회수 실측 갱신 중…");
+            (async () => {
+              try {
+                const st = await ytChannelStats({ channelId: d.channelId, key: ytApiKey });
+                if (st.subscribers != null) { setChannelSubs(st.subscribers); try { localStorage.setItem(`${CHAN_KEY}_subs`, String(st.subscribers)); } catch {} }
+                const views = await ytVideoViews(vids.map((v) => v.videoId), ytApiKey);
+                const updated = vids.map((v) => (views[v.videoId] != null ? { ...v, views: views[v.videoId] } : v));
+                setChannelVideos(updated);
+                try { localStorage.setItem(`${CHAN_KEY}_vids`, JSON.stringify(updated)); } catch {}
+                setApiLive(true);
+                pushLog("ok", `🔑 API 실측 갱신 완료 — 구독자 ${st.subscribers != null ? st.subscribers.toLocaleString() : "?"}명`);
+              } catch (e: any) {
+                pushLog("err", `🔑 API 갱신 실패: ${e.message} (키·제한·사용설정 확인)`);
+              }
+            })();
+          }
           finish();
         } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); finish(); }
       } catch {}
@@ -532,6 +573,9 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
         );
       })()}
 
+      {/* 🔑 유튜브 API 연결 (유튜브 전용) — 구독자·조회수 실시간 */}
+      {isYt && <YtApiKeyBox apiKey={ytApiKey} onSave={saveYtApiKey} T={T} showToast={showToast} />}
+
       {/* 📺 채널 영상 불러오기 (유튜브 전용) — 채널 주소 → 목록 → 골라서 전체 시딩 */}
       {isYt && (
         <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
@@ -615,7 +659,8 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
 
       {/* 💰 수익화(YPP) 진단 — 채널 불러온 뒤(유튜브) */}
       {isYt && channelVideos.length > 0 && (
-        <MonetizeCoach videos={channelVideos} subscribers={channelSubs} T={T} perVideoViews={actions["view"]?.qty || 300} />
+        <MonetizeCoach videos={channelVideos} subscribers={channelSubs} T={T} perVideoViews={actions["view"]?.qty || 300}
+          seededShortsViews={seeded.shortsViews} seededWatchHours={seeded.watchSeconds / 3600} live={apiLive} />
       )}
 
       {/* 실행 패널 */}

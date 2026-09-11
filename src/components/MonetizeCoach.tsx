@@ -19,29 +19,45 @@ const F_MONO = "'JetBrains Mono', ui-monospace, monospace";
 const D90 = 90 * 24 * 3600 * 1000;
 const kfmt = (n: number) => n.toLocaleString();
 
-// 게이지 바
-function Gauge({ label, cur, goal, unit, color, T, note }: { label: string; cur: number; goal: number; unit: string; color: string; T: any; note?: string }) {
-  const pct = Math.min(100, goal > 0 ? Math.round((cur / goal) * 100) : 0);
-  const done = cur >= goal;
+// 게이지 바 — 2색: 실측(진한색) + 시딩 예상(연한 점선, 그 위에 덧칠)
+//  ★ 시딩분은 "예상"이라 실측과 명확히 구분(가짜 성취감 방지). 실제는 🔄새로고침으로 확정.
+function Gauge({ label, cur, goal, unit, color, T, note, seeded = 0, live }: {
+  label: string; cur: number; goal: number; unit: string; color: string; T: any; note?: string; seeded?: number; live?: boolean;
+}) {
+  const total = cur + seeded;
+  const realDone = cur >= goal;
+  const estDone = total >= goal;
+  const basePct = Math.min(100, goal > 0 ? Math.round((cur / goal) * 100) : 0);
+  const seedPct = Math.min(100, goal > 0 ? Math.round((total / goal) * 100) : 0);
   return (
-    <div style={{ background: T.panel2, border: `1px solid ${done ? "#7dd88a" : T.line}`, borderRadius: 12, padding: "11px 13px", marginBottom: 9 }}>
+    <div style={{ background: T.panel2, border: `1px solid ${realDone ? "#7dd88a" : T.line}`, borderRadius: 12, padding: "11px 13px", marginBottom: 9 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 7, marginBottom: 7, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>{label}</span>
-        <span style={{ marginLeft: "auto", fontFamily: F_MONO, fontSize: 12.5, fontWeight: 800, color: done ? "#7dd88a" : color }}>
-          {kfmt(cur)}<span style={{ color: T.sub, fontWeight: 600 }}> / {kfmt(goal)}{unit}</span>
+        <span style={{ fontSize: 12, fontWeight: 800, color: T.ink }}>{label}
+          {live && <span style={{ fontSize: 9, color: "#7dd88a", fontWeight: 800, marginLeft: 5 }}>● 실시간(API)</span>}
         </span>
-        <span style={{ fontSize: 11, fontWeight: 800, color: done ? "#7dd88a" : T.sub }}>{done ? "✅ 달성" : `${pct}%`}</span>
+        <span style={{ marginLeft: "auto", fontFamily: F_MONO, fontSize: 12.5, fontWeight: 800, color: realDone ? "#7dd88a" : color }}>
+          {kfmt(cur)}{seeded > 0 && <span style={{ color: T.gold, fontWeight: 700 }}> +🌱{kfmt(seeded)}</span>}
+          <span style={{ color: T.sub, fontWeight: 600 }}> / {kfmt(goal)}{unit}</span>
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 800, color: realDone ? "#7dd88a" : estDone ? T.gold : T.sub }}>
+          {realDone ? "✅ 달성" : estDone ? "🌱 예상달성" : `${basePct}%`}
+        </span>
       </div>
-      <div style={{ height: 7, borderRadius: 99, background: T.line, overflow: "hidden" }}>
-        <div style={{ height: "100%", width: `${pct}%`, borderRadius: 99, background: done ? "#7dd88a" : color, transition: "width .4s" }} />
+      <div style={{ position: "relative", height: 8, borderRadius: 99, background: T.line, overflow: "hidden" }}>
+        {seeded > 0 && (
+          <div style={{ position: "absolute", inset: 0, width: `${seedPct}%`, borderRadius: 99, background: `repeating-linear-gradient(45deg, ${T.gold}, ${T.gold} 4px, transparent 4px, transparent 8px)`, opacity: 0.5, transition: "width .4s" }} />
+        )}
+        <div style={{ position: "absolute", inset: 0, height: "100%", width: `${basePct}%`, borderRadius: 99, background: realDone ? "#7dd88a" : color, transition: "width .4s" }} />
       </div>
       {note && <div style={{ fontSize: 9.5, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>{note}</div>}
+      {seeded > 0 && <div style={{ fontSize: 9.5, color: T.gold, marginTop: 4, lineHeight: 1.4 }}>🌱 골든시드 시딩 예상 +{kfmt(seeded)}{unit} · 🔄새로고침하면 유튜브 실제 반영분으로 확정</div>}
     </div>
   );
 }
 
-export default function MonetizeCoach({ videos, subscribers, T, perVideoViews = 300 }: {
+export default function MonetizeCoach({ videos, subscribers, T, perVideoViews = 300, seededShortsViews = 0, seededWatchHours = 0, live }: {
   videos: CoachVideo[]; subscribers?: number; T: any; perVideoViews?: number;
+  seededShortsViews?: number; seededWatchHours?: number; live?: boolean;
 }) {
   // 시청시간(비공개 → 사용자 입력, localStorage 보존)
   const [watchHours, setWatchHours] = useState<number>(() => {
@@ -84,15 +100,15 @@ export default function MonetizeCoach({ videos, subscribers, T, perVideoViews = 
       </div>
 
       {/* 1) 구독자 */}
-      <Gauge label="👥 구독자" cur={subs} goal={G.subs2} unit="명" color={T.gold} T={T}
+      <Gauge label="👥 구독자" cur={subs} goal={G.subs2} unit="명" color={T.gold} T={T} live={live}
         note={subs < G.subs1 ? `초기단계(팬후원)는 500명부터 — ${kfmt(G.subs1 - subs)}명 남음` : subs < G.subs2 ? `완전 수익화까지 ${kfmt(subsNeed)}명 남음` : undefined} />
 
-      {/* 2) 쇼츠 경로 */}
-      <Gauge label="🎬 최근 90일 쇼츠 조회" cur={shorts90Views} goal={G.sv} unit="회" color={T.yt} T={T}
+      {/* 2) 쇼츠 경로 — 시딩 예상 반영 */}
+      <Gauge label="🎬 최근 90일 쇼츠 조회" cur={shorts90Views} goal={G.sv} unit="회" color={T.yt} T={T} live={live} seeded={seededShortsViews}
         note={`RSS로 업로드시각 확인된 쇼츠 ${known90.length}개 기준 집계 · 정확한 90일 합계는 유튜브 스튜디오에서 확인${svNeed > 0 ? ` · 부족 ${kfmt(svNeed)}회` : ""}`} />
 
-      {/* 3) 롱폼 시청시간(입력) */}
-      <Gauge label="▶️ 최근 12개월 시청시간" cur={watchHours} goal={G.hours} unit="시간" color="#6db3ff" T={T}
+      {/* 3) 롱폼 시청시간(입력) — 시딩 예상 반영 */}
+      <Gauge label="▶️ 최근 12개월 시청시간" cur={watchHours} goal={G.hours} unit="시간" color="#6db3ff" T={T} seeded={Math.round(seededWatchHours * 10) / 10}
         note="시청시간은 유튜브 스튜디오에만 있는 비공개 값이라 직접 입력해요" />
       <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "-2px 0 12px", paddingLeft: 2 }}>
         <span style={{ fontSize: 10.5, color: T.sub }}>스튜디오 시청시간 입력:</span>
