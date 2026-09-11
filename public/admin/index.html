@@ -8,14 +8,23 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600&display=swap" rel="stylesheet">
 <style>
-  :root{
-    --bg:#08070b; --panel:#131019; --panel2:#1b1725; --line:#2a2436; --line2:#3a3253;
-    --ink:#f4efe4; --sub:#9a9284; --gold:#f5c451; --gold2:#c9a03f; --glow:rgba(245,196,81,.14);
-    --good:#7dd88a; --warn:#f5c451; --danger:#ff7a7a;
+  /* 다크(기본) — 기존보다 한 톤 밝게 */
+  :root, :root.dark{
+    --bg:#14121a; --panel:#201c2b; --panel2:#2a2539; --line:#39334a; --line2:#4a4360;
+    --ink:#f6f1e6; --sub:#b0a894; --gold:#f7cd63; --gold2:#d4ad4a; --glow:rgba(247,205,99,.16);
+    --good:#7dd88a; --warn:#f7cd63; --danger:#ff8a8a;
+    --bgimg:radial-gradient(900px 500px at 12% -8%,#2a2110 0,transparent 55%),radial-gradient(700px 460px at 108% 6%,#221836 0,transparent 50%);
+  }
+  /* 라이트 */
+  :root.light{
+    --bg:#faf6ec; --panel:#fffdf7; --panel2:#f4eedd; --line:#e6dcc2; --line2:#d6c99e;
+    --ink:#2a2010; --sub:#8a7a52; --gold:#b8860b; --gold2:#9a6f14; --glow:rgba(184,134,11,.12);
+    --good:#059669; --warn:#b8860b; --danger:#dc2626;
+    --bgimg:radial-gradient(900px 500px at 12% -8%,#fdf1cf 0,transparent 55%),radial-gradient(700px 460px at 108% 6%,#fbe9d4 0,transparent 50%);
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
   body{font-family:'Pretendard',-apple-system,system-ui,sans-serif;background:var(--bg);color:var(--ink);
-    background-image:radial-gradient(900px 500px at 12% -8%,#1c1608 0,transparent 55%),radial-gradient(700px 460px at 108% 6%,#160f1e 0,transparent 50%);}
+    background-image:var(--bgimg);transition:background .2s,color .2s;}
   .mono{font-family:'JetBrains Mono',monospace;}
   .wrap{max-width:920px;margin:0 auto;padding:16px 14px 60px;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;}
@@ -43,7 +52,7 @@
   .pill{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:900;}
   /* 로그인 게이트 */
   #gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:22px;
-    background:radial-gradient(700px 400px at 50% 0%,#1c1608 0,transparent 60%),#08070b;}
+    background:var(--bg);background-image:var(--bgimg);}
   .logo{width:64px;height:64px;border-radius:19px;display:grid;place-items:center;margin:0 auto 16px;
     background:linear-gradient(135deg,#f9dd86,#f5c451 55%,#c9a03f);box-shadow:0 12px 34px var(--glow);}
   .logo span{font-family:'Bebas Neue',Arial Black,sans-serif;font-size:42px;font-weight:900;color:#231a08;line-height:1;}
@@ -55,6 +64,7 @@
 
 <!-- 로그인 게이트 -->
 <div id="gate">
+  <button class="btn sm" id="themeGate" style="position:absolute;top:16px;right:16px">🌙</button>
   <div style="width:100%;max-width:340px;text-align:center">
     <div class="logo"><span>C</span></div>
     <div style="font-size:20px;font-weight:900;margin-bottom:4px">골든시드 관리자</div>
@@ -74,7 +84,8 @@
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div class="logo" style="width:34px;height:34px;border-radius:10px;margin:0"><span style="font-size:22px">C</span></div>
       <div style="font-size:16px;font-weight:900">골든시드 <small style="color:var(--sub);font-weight:600">관리자</small></div>
-      <button class="btn sm" id="pwChg" style="margin-left:auto">🔑 비번</button>
+      <button class="btn sm" id="themeMain" style="margin-left:auto">🌙</button>
+      <button class="btn sm" id="pwChg">🔑 비번</button>
       <button class="btn sm" id="logout">로그아웃</button>
     </div>
 
@@ -154,6 +165,18 @@
   const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5udWplb3ZlY25tZXN0dmZvaXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMTY1OTEsImV4cCI6MjEwNDU5MjU5MX0.hpgSAFqATfQKDzccpz40eIRxHu64ONsojQ4dY73-Abg';
   const sb=window.supabase.createClient(SB_URL,SB_KEY);
   const $=id=>document.getElementById(id);
+
+  // ── 🌓 라이트/다크 테마(localStorage 저장, 기본 다크) ──
+  function applyTheme(t){
+    document.documentElement.classList.remove('light','dark');
+    document.documentElement.classList.add(t);
+    const icon = t==='dark' ? '☀️' : '🌙';
+    ['themeGate','themeMain'].forEach(id=>{ const b=document.getElementById(id); if(b) b.textContent=icon; });
+    try{ localStorage.setItem('gs_admin_theme', t); }catch(e){}
+  }
+  function toggleTheme(){ applyTheme(document.documentElement.classList.contains('light')?'dark':'light'); }
+  (function(){ let t='dark'; try{ t=localStorage.getItem('gs_admin_theme')||'dark'; }catch(e){} applyTheme(t); })();
+  ['themeGate','themeMain'].forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=toggleTheme; });
 
   // 플랫폼별 액션(회원 주문화면과 동일)
   const TOOLS={
