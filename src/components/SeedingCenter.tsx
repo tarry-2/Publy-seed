@@ -4,7 +4,7 @@ import MascotBot from "./MascotBot";
 import MonetizeCoach from "./MonetizeCoach";
 import YtApiKeyBox from "./YtApiKeyBox";
 import { ytChannelStats, ytVideoViews } from "../lib/youtubeApi";
-import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GsPlan } from "../lib/supabase";
+import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GS_MEMBER_PLANS, GsPlan } from "../lib/supabase";
 
 /* ───────────────────────────────────────────────────────────
    골든시드 시딩 콘솔 (SeedingCenter)
@@ -102,12 +102,15 @@ function initActions(p: Platform): Record<string, { on: boolean; qty: number }> 
 // ═══════════════════════════════════════════════════════════
 // 상위 셸 — 헤더 + 플랫폼 탭 + 두 독립 패널(display 토글로 항상 마운트)
 // ═══════════════════════════════════════════════════════════
-export default function SeedingCenter({ showToast, theme = "dark", approvedTools, allowedByTool, planByTool }: {
+export default function SeedingCenter({ showToast, theme = "dark", approvedTools, allowedByTool, planByTool, remainByTool, expireByTool, licFetchedAt }: {
   showToast?: (m: string, t?: any) => void;
   theme?: "light" | "dark";
   approvedTools?: string[];             // 승인된 플랫폼(없으면 전체 허용 = 관리자/미게이트 모드)
   allowedByTool?: Record<string, string[]>;  // 플랫폼별 승인된 액션 id 배열
   planByTool?: Record<string, string>;       // 플랫폼별 승인 등급(물량 상한용)
+  remainByTool?: Record<string, number>;     // 플랫폼별 남은 기간(초) — 만기 표시
+  expireByTool?: Record<string, string | null>;  // 플랫폼별 만기일(null=무기한)
+  licFetchedAt?: number;                     // 라이선스 로드 시각(만기 카운트다운 기준)
 }) {
   const dark = theme === "dark";
   const T = palette(dark);
@@ -152,12 +155,12 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
       {/* 승인된 패널만 항상 마운트 → 실행 중 탭 옮겨도 언마운트 안 됨(트래픽 원칙 A) */}
       {platforms.includes("youtube") && (
         <div style={{ display: platform === "youtube" ? "block" : "none" }}>
-          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.youtube} plan={planByTool?.youtube} />
+          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.youtube} plan={planByTool?.youtube} remainSec={remainByTool?.youtube} expireAt={expireByTool?.youtube} licFetchedAt={licFetchedAt} />
         </div>
       )}
       {platforms.includes("instagram") && (
         <div style={{ display: platform === "instagram" ? "block" : "none" }}>
-          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.instagram} plan={planByTool?.instagram} />
+          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.instagram} plan={planByTool?.instagram} remainSec={remainByTool?.instagram} expireAt={expireByTool?.instagram} licFetchedAt={licFetchedAt} />
         </div>
       )}
     </div>
@@ -167,7 +170,7 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
 // ═══════════════════════════════════════════════════════════
 // 플랫폼별 독립 패널 — 자기 URL·액션·로그·KPI·실행상태를 전부 따로 가진다
 // ═══════════════════════════════════════════════════════════
-function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[]; plan?: string }) {
+function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, remainSec, expireAt, licFetchedAt }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[]; plan?: string; remainSec?: number; expireAt?: string | null; licFetchedAt?: number }) {
   const isYt = platform === "youtube";
   const BOT = isYt ? YT_BOT : INSTA_BOT;   // 플랫폼별 봇(동시 실행 = 포트 분리)
   const accent = isYt ? T.yt : T.gold;
@@ -254,6 +257,9 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   ]);
   const [stats, setStats] = useState({ views: 0, success: 0, fail: 0 });
   const [logZoom, setLogZoom] = useState(false);   // 🔍 로그 크게 보기(앱 내 모달, 트래픽 계승)
+  const [showPlanTable, setShowPlanTable] = useState(false);   // 📋 등급별 사용표 펼침
+  const [licNow, setLicNow] = useState(Date.now());            // 🎫 만기 카운트다운용 실시간 tick
+  useEffect(() => { const iv = window.setInterval(() => setLicNow(Date.now()), 1000); return () => window.clearInterval(iv); }, []);
   // ⏱️ 골든아워 스케줄러 상태
   const [ghTarget, setGhTarget] = useState(0);      // 현재 영상 목표 조회 물량
   const [ghDone, setGhDone] = useState(0);          // 현재 영상 실행된 조회 수
@@ -521,6 +527,19 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   const longList = useMemo(() => sortedVideos.filter((v) => v.type === "longform" && !isGolden(v)), [sortedVideos]);
   const selCount = selectedIds.size;
 
+  // 🎫 현재 등급 + 만기 카운트다운(서버 remain_sec - 경과초, 시계조작 방지). 관리자/무제한 = 무기한.
+  const isUnlimited = gsPlan === "unlimited" || !gated;
+  const elapsedLic = licFetchedAt ? Math.max(0, Math.floor((licNow - licFetchedAt) / 1000)) : 0;
+  const liveRemain = Math.max(0, (remainSec ?? 0) - elapsedLic);
+  const licDDay = Math.floor(liveRemain / 86400);
+  const licHH = String(Math.floor((liveRemain % 86400) / 3600)).padStart(2, "0");
+  const licMM = String(Math.floor((liveRemain % 3600) / 60)).padStart(2, "0");
+  const licSS = String(liveRemain % 60).padStart(2, "0");
+  const expDate = expireAt ? new Date(expireAt) : null;
+  const expStr = expDate ? `${expDate.getFullYear()}.${String(expDate.getMonth() + 1).padStart(2, "0")}.${String(expDate.getDate()).padStart(2, "0")}` : "";
+  const gradeLabel = isUnlimited ? "무제한" : (GS_PLAN_LABEL[gsPlan] || gsPlan);
+  const platLabel = isYt ? "유튜브" : "인스타";
+
   // 📊 목표/완료/남음 — 실행 중이든 아니든 항상 표시(테리 지시). 대기 상태면 켠 조회 물량을 목표로 미리보기.
   const previewTarget = actions["view"]?.on ? (actions["view"].qty || 0) : 0;
   const targetNow = running ? ghTarget : previewTarget;
@@ -533,8 +552,55 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     { label: "실패", value: stats.fail, unit: "", tint: "#ff7a7a" },
   ];
 
+  const licExpiring = !isUnlimited && liveRemain > 0 && liveRemain <= 3 * 86400;   // D-3 이하 임박
+
   return (
     <div>
+      {/* 🎫 현재 등급 · 만기 (탭마다 다름) + 등급별 사용표 — 각 탭 상단 */}
+      <div style={{ background: `linear-gradient(140deg,${T.panel2},${T.panel})`, border: `1px solid ${licExpiring ? "#ff7a7a" : T.line}`, borderRadius: 14, padding: "11px 14px", marginBottom: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 12.5, fontWeight: 800, color: isYt ? T.yt : T.gold }}>{platLabel}</span>
+          <span style={{ fontSize: 11.5, fontWeight: 800, color: T.gold, background: T.goldGlow, border: `1px solid ${T.gold}`, padding: "2px 10px", borderRadius: 99 }}>{gradeLabel} 등급</span>
+          {isUnlimited ? (
+            <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>🎫 이용기간 <b style={{ color: T.ink }}>무기한</b>(관리자)</span>
+          ) : (
+            <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>
+              🎫 만기 {liveRemain <= 0
+                ? <b style={{ color: "#ff7a7a" }}>만료됨 — 연장 문의</b>
+                : <><b style={{ color: licExpiring ? "#ff7a7a" : T.gold }}>D-{licDDay}</b>{expStr ? ` · ${expStr}까지` : ""} · <span style={{ fontFamily: F_MONO, color: T.ink }}>{licHH}:{licMM}:{licSS}</span></>}
+            </span>
+          )}
+          <button onClick={() => setShowPlanTable(v => !v)} style={{ marginLeft: "auto", padding: "5px 11px", borderRadius: 8, border: `1px solid ${showPlanTable ? T.gold : T.line}`, background: showPlanTable ? T.goldGlow : T.panel2, color: showPlanTable ? T.gold : T.ink, fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>📋 등급별 사용표</button>
+        </div>
+        {/* 📋 등급별 사용표 — 무제한(관리자) 제외, free 없음(베이직/프로/프리미엄) */}
+        {showPlanTable && (
+          <div style={{ marginTop: 11, overflowX: "auto" }}>
+            <table style={{ width: "100%", minWidth: 320, borderCollapse: "collapse", fontSize: 11.5 }}>
+              <thead>
+                <tr style={{ color: T.sub }}>
+                  <th style={{ textAlign: "left", padding: "6px 8px", borderBottom: `1px solid ${T.line}` }}>액션 (하루 최대)</th>
+                  {GS_MEMBER_PLANS.map(p => (
+                    <th key={p} style={{ textAlign: "right", padding: "6px 8px", borderBottom: `1px solid ${T.line}`, color: gsPlan === p ? T.gold : T.sub }}>{GS_PLAN_LABEL[p]}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ACTIONS[platform].map(a => (
+                  <tr key={a.id}>
+                    <td style={{ padding: "6px 8px", borderBottom: `1px solid ${T.line}`, color: T.ink, fontWeight: 600 }}>{a.icon} {a.label}</td>
+                    {GS_MEMBER_PLANS.map(p => {
+                      const lim = GS_PLAN_LIMITS[platform]?.[a.id]?.[p];
+                      return <td key={p} style={{ textAlign: "right", padding: "6px 8px", borderBottom: `1px solid ${T.line}`, fontFamily: F_MONO, color: gsPlan === p ? T.gold : T.ink, fontWeight: gsPlan === p ? 800 : 500 }}>{lim != null ? lim.toLocaleString() : "-"}</td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div style={{ fontSize: 10, color: T.sub, marginTop: 6, lineHeight: 1.4 }}>* 골든아워(30분) 동안 액션별 최대 물량이에요. 무제한(관리자)은 제한이 없어요. 지금 내 등급 <b style={{ color: T.gold }}>{gradeLabel}</b> 열이 강조돼요.</div>
+          </div>
+        )}
+      </div>
+
       {/* KPI — 플랫폼별 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
         {kpis.map((k) => (

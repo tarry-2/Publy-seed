@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { ytTestKey } from "../lib/youtubeApi";
+import g1 from "../assets/guide/g1.jpg";
+import g2 from "../assets/guide/g2.jpg";
+import g3 from "../assets/guide/g3.jpg";
+import g4 from "../assets/guide/g4.jpg";
 
 /* ───────────────────────────────────────────────────────────
    🔑 유튜브 API 연결 박스 — 키 입력·저장 + 발급방법·사용방법·연결테스트
@@ -73,23 +77,27 @@ export default function YtApiKeyBox({ apiKey, onSave, T, showToast }: {
         </div>
       )}
 
-      {/* 📖 발급 방법 (버튼 안 기능) */}
+      {/* 📖 발급 방법 (버튼 안 기능) — 실제 화면 스크린샷 + 단계별 */}
       {panel === "issue" && (
-        <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 12, background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink, lineHeight: 1.75 }}>
-          <div style={{ fontWeight: 800, color: T.gold, marginBottom: 6 }}>📖 API 키 발급 방법 (무료, 5분)</div>
-          <div><b>1.</b> <b style={{ color: T.gold }}>console.cloud.google.com</b> 접속 → 구글 로그인</div>
-          <div><b>2.</b> 상단 프로젝트 선택 → <b>새 프로젝트</b> 만들기(이름 아무거나) → 만들기</div>
-          <div><b>3.</b> 상단 검색창에 <b>"YouTube Data API v3"</b> 검색 → 클릭 → <b style={{ color: T.gold }}>[사용]</b> 버튼</div>
-          <div><b>4.</b> 왼쪽 메뉴 <b>"사용자 인증 정보"</b> → <b>[+ 사용자 인증 정보 만들기]</b> → <b>"API 키"</b></div>
-          <div><b>5.</b> 생성된 키 <b>복사</b> → 위 칸에 붙여넣고 <b style={{ color: T.gold }}>💾 저장</b></div>
-          <div style={{ color: T.sub, marginTop: 6, fontSize: 10.5, lineHeight: 1.5 }}>
-            💡 키 제한 화면이 뜨면 <b>"애플리케이션 제한 = 없음"</b>으로 두세요(앱에서 써야 함).
-            API 제한은 "YouTube Data API v3"만 허용하면 더 안전해요.
+        <div style={{ marginTop: 10, padding: "13px 15px", borderRadius: 12, background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink, lineHeight: 1.65 }}>
+          <div style={{ fontWeight: 800, color: T.gold, marginBottom: 3, fontSize: 12.5 }}>📖 API 키 발급 방법</div>
+          <div style={{ color: T.sub, marginBottom: 10, fontSize: 10.5 }}>무료 · 신용카드 없이 · 약 5분. 화면 그대로 따라오세요.</div>
+
+          <Step n="1" T={T} text={<>브라우저에서 <b style={{ color: T.gold }}>console.cloud.google.com</b> 접속 → 구글 로그인</>} />
+          <Step n="2" T={T} img={g1} text={<>맨 위 <b>프로젝트 선택</b> 클릭 → <b style={{ color: T.gold }}>이미 프로젝트가 있으면 그걸 클릭</b>해서 그대로 쓰면 돼요(새로 안 만들어도 됨). 없으면 우측 <b>새 프로젝트</b> → 이름 아무거나 → 만들기</>} />
+          <Step n="3" T={T} img={g2} text={<>맨 위 <b>검색창</b>에 <b>YouTube Data API v3</b> 입력 → 결과 클릭 → 파란 <b style={{ color: T.gold }}>[사용]</b> 버튼. 사진처럼 <b>"사용 설정됨"</b>이면 이미 켜진 거니 넘어가세요</>} />
+          <Step n="4" T={T} img={g3} text={<>왼쪽 메뉴 <b>사용자 인증 정보</b> → 위쪽 <b>[+ 사용자 인증 정보 만들기]</b> → <b style={{ color: T.gold }}>API 키</b> 선택</>} />
+          <Step n="5" T={T} img={g4} text={<><b style={{ color: "#ff7a7a" }}>⭐ 여기서 자주 막혀요:</b> "API 제한사항 선택"이 <b>필수</b>라 빨간 <b>"API를 선택해야 합니다"</b>가 뜨면 → 드롭다운(▼) 열어 <b style={{ color: T.gold }}>YouTube Data API v3</b>를 체크 → 확인</>} />
+          <Step n="6" T={T} text={<>같은 화면에서 <b>애플리케이션 제한사항 = 없음</b> 선택 / <b>"서비스 계정 인증" 체크박스는 비워둠</b> → 맨 아래 파란 <b style={{ color: T.gold }}>[만들기]</b></>} />
+          <Step n="7" T={T} text={<>뜨는 <b>키를 복사</b> → 위 칸에 붙여넣고 <b style={{ color: T.gold }}>💾 저장</b> → <b>[🔌 연결 테스트]</b>로 확인</>} />
+
+          <div style={{ color: "#ff9e6b", marginTop: 8, fontSize: 10.5, lineHeight: 1.5, borderTop: `1px solid ${T.line}`, paddingTop: 8 }}>
+            💡 중간에 <b>결제(카드) 등록</b> 창이 떠도 무시하세요 — 조회 기능은 무료 할당량 안에서 카드 없이 작동해요.
           </div>
         </div>
       )}
 
-      {/* ❓ 사용 방법 (버튼 안 기능) */}
+      {/* ❓ 사용 방법 (버튼 안 기능) — 아래 Step는 발급방법에서만 씀 */}
       {panel === "usage" && (
         <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 12, background: T.panel2, border: `1px solid ${T.line}`, fontSize: 11.5, color: T.ink, lineHeight: 1.75 }}>
           <div style={{ fontWeight: 800, color: T.gold, marginBottom: 6 }}>❓ 사용 방법</div>
@@ -101,6 +109,19 @@ export default function YtApiKeyBox({ apiKey, onSave, T, showToast }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// 발급방법 단계 — 번호 + 설명 + (있으면) 실제 화면 스크린샷
+function Step({ n, text, img, T }: { n: string; text: any; img?: string; T: any }) {
+  return (
+    <div style={{ marginBottom: img ? 11 : 6 }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+        <span style={{ flexShrink: 0, width: 19, height: 19, borderRadius: 6, background: T.gold, color: "#1a1408", fontSize: 11, fontWeight: 900, display: "grid", placeItems: "center", marginTop: 1 }}>{n}</span>
+        <span style={{ flex: 1 }}>{text}</span>
+      </div>
+      {img && <img src={img} alt="" style={{ width: "100%", marginTop: 7, borderRadius: 9, border: `1px solid ${T.line}`, display: "block" }} />}
     </div>
   );
 }

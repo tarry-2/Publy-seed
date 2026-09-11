@@ -53,6 +53,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   // ── 🎫 라이선스(승인) 로드 — 승인된 tool·action 만 시딩 콘솔에서 켜짐 ──
   const [lics, setLics] = useState<ToolLicense[]>([]);
   const [licLoaded, setLicLoaded] = useState(false);
+  const [licFetchedAt, setLicFetchedAt] = useState(0);   // 🎫 라이선스 로드 시각 — 만기 카운트다운 기준(서버 remain_sec - 경과초, 시계조작 방지)
   const [homeView, setHomeView] = useState(true);  // true=주문화면, false=시딩 콘솔
   const homeInitRef = useRef(false);               // 최초 로드 1회만 홈/대시보드 판단(트래픽 계승)
   useEffect(() => {
@@ -60,7 +61,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
     const load = async () => {
       const l = await getTrafficLicenses(user.email);
       if (!alive) return;
-      setLics(l); setLicLoaded(true);
+      setLics(l); setLicLoaded(true); setLicFetchedAt(Date.now());
       // ★트래픽 계승: 최초 로드 1회만 판단 — 승인 있으면(만료 전) 대시보드 직행, 승인 0이면 주문화면 유지.
       //   이후엔 사용자가 상단 버튼으로 자유 전환(자동 강제전환 안 함).
       if (!homeInitRef.current) {
@@ -81,9 +82,14 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   const allowedByTool: Record<string, string[]> = {};
   // tool → 승인 등급 맵(SeedingCenter가 이걸로 물량 상한 적용)
   const planByTool: Record<string, string> = {};
+  // tool → 남은 기간(초)·만기일 맵(각 탭 하단 만기 표시용, 탭마다 만료 다름)
+  const remainByTool: Record<string, number> = {};
+  const expireByTool: Record<string, string | null> = {};
   activeLics.forEach(l => {
     allowedByTool[l.tool] = Array.isArray(l.allowed_actions) ? l.allowed_actions : [];
     planByTool[l.tool] = l.plan || "basic";
+    remainByTool[l.tool] = l.remain_sec ?? 0;
+    expireByTool[l.tool] = l.expire_at;
   });
 
   // ── 🍞 토스트(트래픽 계승) ──
@@ -154,7 +160,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
             <div style={{ padding: "10px 20px 0" }}>
               <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>승인된 시딩: {approvedTools.map(t => t === "youtube" ? "유튜브" : "인스타").join(" · ")}</span>
             </div>
-            <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} planByTool={planByTool} />
+            <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} planByTool={planByTool} remainByTool={remainByTool} expireByTool={expireByTool} licFetchedAt={licFetchedAt} />
           </>
         )}
       </div>

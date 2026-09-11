@@ -1,6 +1,6 @@
 {
   "name": "goldenseed",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "골든시드(GoldenSeed) - 유튜브/인스타 골든아워 초기시딩 엔진",
   "main": "dist-electron/main.js",
   "scripts": {

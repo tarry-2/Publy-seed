@@ -21,8 +21,8 @@ const kfmt = (n: number) => n.toLocaleString();
 
 // 게이지 바 — 2색: 실측(진한색) + 시딩 예상(연한 점선, 그 위에 덧칠)
 //  ★ 시딩분은 "예상"이라 실측과 명확히 구분(가짜 성취감 방지). 실제는 🔄새로고침으로 확정.
-function Gauge({ label, cur, goal, unit, color, T, note, seeded = 0, live }: {
-  label: string; cur: number; goal: number; unit: string; color: string; T: any; note?: string; seeded?: number; live?: boolean;
+function Gauge({ label, cur, goal, unit, color, T, note, seeded = 0, live, apiConfirm }: {
+  label: string; cur: number; goal: number; unit: string; color: string; T: any; note?: string; seeded?: number; live?: boolean; apiConfirm?: boolean;
 }) {
   const total = cur + seeded;
   const realDone = cur >= goal;
@@ -50,7 +50,7 @@ function Gauge({ label, cur, goal, unit, color, T, note, seeded = 0, live }: {
         <div style={{ position: "absolute", inset: 0, height: "100%", width: `${basePct}%`, borderRadius: 99, background: realDone ? "#7dd88a" : color, transition: "width .4s" }} />
       </div>
       {note && <div style={{ fontSize: 9.5, color: T.sub, marginTop: 5, lineHeight: 1.4 }}>{note}</div>}
-      {seeded > 0 && <div style={{ fontSize: 9.5, color: T.gold, marginTop: 4, lineHeight: 1.4 }}>🌱 골든시드 시딩 예상 +{kfmt(seeded)}{unit} · 🔄새로고침하면 유튜브 실제 반영분으로 확정</div>}
+      {seeded > 0 && <div style={{ fontSize: 9.5, color: T.gold, marginTop: 4, lineHeight: 1.4 }}>🌱 골든시드 시딩 예상 +{kfmt(seeded)}{unit} · {apiConfirm ? "🔄새로고침하면 유튜브 실제 반영분으로 확정" : "시청시간은 유튜브 스튜디오 비공개 값이라 자동 확정 안 됨 — 스튜디오에서 확인 후 직접 입력"}</div>}
     </div>
   );
 }
@@ -104,7 +104,7 @@ export default function MonetizeCoach({ videos, subscribers, T, perVideoViews = 
         note={subs < G.subs1 ? `초기단계(팬후원)는 500명부터 — ${kfmt(G.subs1 - subs)}명 남음` : subs < G.subs2 ? `완전 수익화까지 ${kfmt(subsNeed)}명 남음` : undefined} />
 
       {/* 2) 쇼츠 경로 — 시딩 예상 반영 */}
-      <Gauge label="🎬 최근 90일 쇼츠 조회" cur={shorts90Views} goal={G.sv} unit="회" color={T.yt} T={T} live={live} seeded={seededShortsViews}
+      <Gauge label="🎬 최근 90일 쇼츠 조회" cur={shorts90Views} goal={G.sv} unit="회" color={T.yt} T={T} live={live} seeded={seededShortsViews} apiConfirm
         note={`RSS로 업로드시각 확인된 쇼츠 ${known90.length}개 기준 집계 · 정확한 90일 합계는 유튜브 스튜디오에서 확인${svNeed > 0 ? ` · 부족 ${kfmt(svNeed)}회` : ""}`} />
 
       {/* 3) 롱폼 시청시간(입력) — 시딩 예상 반영 */}
