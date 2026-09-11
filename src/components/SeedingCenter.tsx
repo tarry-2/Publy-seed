@@ -79,10 +79,19 @@ function initActions(p: Platform): Record<string, { on: boolean; qty: number }> 
 // ═══════════════════════════════════════════════════════════
 // 상위 셸 — 헤더 + 플랫폼 탭 + 두 독립 패널(display 토글로 항상 마운트)
 // ═══════════════════════════════════════════════════════════
-export default function SeedingCenter({ showToast, theme = "dark" }: { showToast?: (m: string, t?: any) => void; theme?: "light" | "dark" }) {
+export default function SeedingCenter({ showToast, theme = "dark", approvedTools, allowedByTool }: {
+  showToast?: (m: string, t?: any) => void;
+  theme?: "light" | "dark";
+  approvedTools?: string[];             // 승인된 플랫폼(없으면 전체 허용 = 관리자/미게이트 모드)
+  allowedByTool?: Record<string, string[]>;  // 플랫폼별 승인된 액션 id 배열
+}) {
   const dark = theme === "dark";
   const T = palette(dark);
-  const [platform, setPlatform] = useState<Platform>("youtube");
+  // 승인된 플랫폼만 탭에 노출(approvedTools 없으면 전체 = 예전 동작 유지)
+  const platforms: Platform[] = (approvedTools && approvedTools.length)
+    ? (["youtube", "instagram"] as Platform[]).filter(p => approvedTools.includes(p))
+    : (["youtube", "instagram"] as Platform[]);
+  const [platform, setPlatform] = useState<Platform>(platforms[0] || "youtube");
 
   return (
     <div style={{ minHeight: "100%", background: T.bg, color: T.ink, fontFamily: F_BODY, padding: "18px 20px 24px" }}>
@@ -97,9 +106,9 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
         </div>
       </div>
 
-      {/* 플랫폼 탭 — 유튜브/인스타 각각 독립 패널 전환(상태는 서로 안 섞임) */}
+      {/* 플랫폼 탭 — 승인된 플랫폼만. 각각 독립 패널 전환(상태는 서로 안 섞임) */}
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {(["youtube", "instagram"] as Platform[]).map((p) => {
+        {platforms.map((p) => {
           const on = platform === p, isYt = p === "youtube";
           return (
             <button key={p} onClick={() => setPlatform(p)} style={{
@@ -116,13 +125,17 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
         })}
       </div>
 
-      {/* 두 패널 항상 마운트 → 실행 중 탭 옮겨도 언마운트 안 됨(트래픽 원칙 A) */}
-      <div style={{ display: platform === "youtube" ? "block" : "none" }}>
-        <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} />
-      </div>
-      <div style={{ display: platform === "instagram" ? "block" : "none" }}>
-        <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} />
-      </div>
+      {/* 승인된 패널만 항상 마운트 → 실행 중 탭 옮겨도 언마운트 안 됨(트래픽 원칙 A) */}
+      {platforms.includes("youtube") && (
+        <div style={{ display: platform === "youtube" ? "block" : "none" }}>
+          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.youtube} />
+        </div>
+      )}
+      {platforms.includes("instagram") && (
+        <div style={{ display: platform === "instagram" ? "block" : "none" }}>
+          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.instagram} />
+        </div>
+      )}
     </div>
   );
 }
@@ -130,10 +143,12 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
 // ═══════════════════════════════════════════════════════════
 // 플랫폼별 독립 패널 — 자기 URL·액션·로그·KPI·실행상태를 전부 따로 가진다
 // ═══════════════════════════════════════════════════════════
-function SeedingPanel({ platform, showToast, T, dark }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean }) {
+function SeedingPanel({ platform, showToast, T, dark, allowedActions }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[] }) {
   const isYt = platform === "youtube";
   const accent = isYt ? T.yt : T.gold;
-  const defs = ACTIONS[platform];
+  // 승인된 액션만 노출(allowedActions 없으면=미게이트/관리자 전체 허용)
+  const gated = Array.isArray(allowedActions);
+  const defs = gated ? ACTIONS[platform].filter(a => allowedActions!.includes(a.id)) : ACTIONS[platform];
 
   const [videoUrl, setVideoUrl] = useState("");
   const [contentType, setContentType] = useState<string>(isYt ? "shorts" : CONTENT[platform][0][0]);

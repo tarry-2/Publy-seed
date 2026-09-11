@@ -13,5 +13,11 @@
     "strict": true,
     "esModuleInterop": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": [
+    "src/TrafficApp.tsx",
+    "src/pages/DashboardPage.tsx",
+    "src/pages/NeighborPage.tsx",
+    "src/components/InflowCenter.tsx"
+  ]
 }

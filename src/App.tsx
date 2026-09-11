@@ -3,7 +3,6 @@ import LoginPage from "./pages/LoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import AdminPageRaw from "./pages/AdminPage";
 const AdminPage = AdminPageRaw as React.ComponentType<any>;
-import DashboardPage from "./pages/DashboardPage";
 import GoldenSeedApp from "./GoldenSeedApp";
 import { PublyUser, refreshUserById, touchLastSeen, logoutServerSession, verifyAdminSession, clearAdminSession, getMemberSessionToken, isThisDeviceActive } from "./lib/supabase";
 

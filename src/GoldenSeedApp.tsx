@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { PublyUser } from "./lib/supabase";
+import { PublyUser, getTrafficLicenses, getMemberSessionToken, ToolLicense } from "./lib/supabase";
 import { botFetch } from "./lib/botApi";
 import SeedingCenter from "./components/SeedingCenter";
+import OrderHome from "./components/OrderHome";
 
 /* ───────────────────────────────────────────────────────────
    🌱 GoldenSeedApp — 골든시드 로그인 후 메인 셸.
@@ -40,6 +41,30 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   // ── 앱 버전 ──
   const [appVersion, setAppVersion] = useState("");
   useEffect(() => { window.electron?.getAppVersion?.().then((v: string) => setAppVersion(v)).catch(() => {}); }, []);
+
+  // ── 🎫 라이선스(승인) 로드 — 승인된 tool·action 만 시딩 콘솔에서 켜짐 ──
+  const [lics, setLics] = useState<ToolLicense[]>([]);
+  const [licLoaded, setLicLoaded] = useState(false);
+  const [homeView, setHomeView] = useState(true);  // true=주문화면, false=시딩 콘솔
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const l = await getTrafficLicenses(user.email);
+      if (!alive) return;
+      setLics(l); setLicLoaded(true);
+      // 승인이 하나라도 있으면 처음부터 콘솔을 볼 수 있게(단, 첫 로드시 승인 없으면 주문화면 유지)
+    };
+    void load();
+    const iv = window.setInterval(load, 4000);   // 관리자가 승인/취소하면 4초 내 반영
+    return () => { alive = false; window.clearInterval(iv); };
+  }, [user.email]);
+
+  // 승인되어 살아있는(만료 안 된) 라이선스만
+  const activeLics = lics.filter(l => l.expire_at === null || (l.remain_sec ?? 0) > 0);
+  const approvedTools = activeLics.map(l => l.tool);
+  // tool → 승인된 액션 배열 맵(SeedingCenter가 이걸로 켤 수 있는 액션 제한)
+  const allowedByTool: Record<string, string[]> = {};
+  activeLics.forEach(l => { allowedByTool[l.tool] = Array.isArray(l.allowed_actions) ? l.allowed_actions : []; });
 
   // ── 🍞 토스트(트래픽 계승) ──
   const [toasts, setToasts] = useState<{ id: number; msg: string; type: string }[]>([]);
@@ -84,9 +109,28 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
         </div>
       </div>
 
-      {/* 본문 = 시딩 콘솔. SeedingCenter가 자체적으로 봇 연동·상태·로그를 관리한다. */}
+      {/* 본문 — 승인 게이트: 승인 없으면 주문화면, 있으면 주문↔콘솔 전환 */}
       <div style={{ flex: 1, overflowY: "auto" }}>
-        <SeedingCenter showToast={showToast} theme={theme} />
+        {!licLoaded ? (
+          <div style={{ padding: 40, textAlign: "center", color: T.sub, fontSize: 13 }}>불러오는 중…</div>
+        ) : (approvedTools.length === 0 || homeView) ? (
+          <OrderHome
+            token={getMemberSessionToken()}
+            theme={theme}
+            memberName={user.name}
+            approvedTools={approvedTools}
+            onGoConsole={() => setHomeView(false)}
+          />
+        ) : (
+          <>
+            {/* 콘솔 상단: 주문화면으로 돌아가기 */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px 0" }}>
+              <button onClick={() => setHomeView(true)} style={{ ...btn(T.panel, T.sub), padding: "6px 12px" }}>← 주문/신청 화면</button>
+              <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>승인된 시딩: {approvedTools.map(t => t === "youtube" ? "유튜브" : "인스타").join(" · ")}</span>
+            </div>
+            <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} />
+          </>
+        )}
       </div>
 
       {/* 토스트 */}
