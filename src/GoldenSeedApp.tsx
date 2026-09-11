@@ -64,7 +64,12 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   const approvedTools = activeLics.map(l => l.tool);
   // tool → 승인된 액션 배열 맵(SeedingCenter가 이걸로 켤 수 있는 액션 제한)
   const allowedByTool: Record<string, string[]> = {};
-  activeLics.forEach(l => { allowedByTool[l.tool] = Array.isArray(l.allowed_actions) ? l.allowed_actions : []; });
+  // tool → 승인 등급 맵(SeedingCenter가 이걸로 물량 상한 적용)
+  const planByTool: Record<string, string> = {};
+  activeLics.forEach(l => {
+    allowedByTool[l.tool] = Array.isArray(l.allowed_actions) ? l.allowed_actions : [];
+    planByTool[l.tool] = l.plan || "basic";
+  });
 
   // ── 🍞 토스트(트래픽 계승) ──
   const [toasts, setToasts] = useState<{ id: number; msg: string; type: string }[]>([]);
@@ -128,7 +133,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
               <button onClick={() => setHomeView(true)} style={{ ...btn(T.panel, T.sub), padding: "6px 12px" }}>← 주문/신청 화면</button>
               <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>승인된 시딩: {approvedTools.map(t => t === "youtube" ? "유튜브" : "인스타").join(" · ")}</span>
             </div>
-            <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} />
+            <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} planByTool={planByTool} />
           </>
         )}
       </div>

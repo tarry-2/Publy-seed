@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { BotEventStream, botFetch } from "../lib/botApi";
 import MascotBot from "./MascotBot";
+import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GsPlan } from "../lib/supabase";
 
 /* ───────────────────────────────────────────────────────────
    골든시드 시딩 콘솔 (SeedingCenter)
@@ -79,11 +80,12 @@ function initActions(p: Platform): Record<string, { on: boolean; qty: number }> 
 // ═══════════════════════════════════════════════════════════
 // 상위 셸 — 헤더 + 플랫폼 탭 + 두 독립 패널(display 토글로 항상 마운트)
 // ═══════════════════════════════════════════════════════════
-export default function SeedingCenter({ showToast, theme = "dark", approvedTools, allowedByTool }: {
+export default function SeedingCenter({ showToast, theme = "dark", approvedTools, allowedByTool, planByTool }: {
   showToast?: (m: string, t?: any) => void;
   theme?: "light" | "dark";
   approvedTools?: string[];             // 승인된 플랫폼(없으면 전체 허용 = 관리자/미게이트 모드)
   allowedByTool?: Record<string, string[]>;  // 플랫폼별 승인된 액션 id 배열
+  planByTool?: Record<string, string>;       // 플랫폼별 승인 등급(물량 상한용)
 }) {
   const dark = theme === "dark";
   const T = palette(dark);
@@ -128,12 +130,12 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
       {/* 승인된 패널만 항상 마운트 → 실행 중 탭 옮겨도 언마운트 안 됨(트래픽 원칙 A) */}
       {platforms.includes("youtube") && (
         <div style={{ display: platform === "youtube" ? "block" : "none" }}>
-          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.youtube} />
+          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.youtube} plan={planByTool?.youtube} />
         </div>
       )}
       {platforms.includes("instagram") && (
         <div style={{ display: platform === "instagram" ? "block" : "none" }}>
-          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.instagram} />
+          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.instagram} plan={planByTool?.instagram} />
         </div>
       )}
     </div>
@@ -143,12 +145,18 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
 // ═══════════════════════════════════════════════════════════
 // 플랫폼별 독립 패널 — 자기 URL·액션·로그·KPI·실행상태를 전부 따로 가진다
 // ═══════════════════════════════════════════════════════════
-function SeedingPanel({ platform, showToast, T, dark, allowedActions }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[] }) {
+function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[]; plan?: string }) {
   const isYt = platform === "youtube";
   const accent = isYt ? T.yt : T.gold;
   // 승인된 액션만 노출(allowedActions 없으면=미게이트/관리자 전체 허용)
   const gated = Array.isArray(allowedActions);
   const defs = gated ? ACTIONS[platform].filter(a => allowedActions!.includes(a.id)) : ACTIONS[platform];
+  // 등급 물량 상한 — plan 있으면 그 등급 한도, 없으면(관리자/미게이트) 무제한(0)
+  const gsPlan = (plan as GsPlan) || "unlimited";
+  const limitOf = (actionId: string): number => {
+    const t = GS_PLAN_LIMITS[platform]?.[actionId];
+    return t ? (t[gsPlan] ?? 0) : 0;   // 0 = 무제한
+  };
 
   const [videoUrl, setVideoUrl] = useState("");
   const [contentType, setContentType] = useState<string>(isYt ? "shorts" : CONTENT[platform][0][0]);
@@ -173,11 +181,28 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions }: { platfo
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
   useEffect(() => () => { esRef.current?.close(); }, []);
 
+  // 등급(plan) 바뀌면 각 액션 물량을 그 등급 상한으로 clamp(기본값이 상한보다 크면 낮춤)
+  useEffect(() => {
+    setActions((a) => {
+      const next = { ...a }; let changed = false;
+      Object.keys(next).forEach((id) => {
+        const lim = limitOf(id);
+        if (lim > 0 && next[id].qty > lim) { next[id] = { ...next[id], qty: lim }; changed = true; }
+      });
+      return changed ? next : a;
+    });
+  }, [plan]);
+
   const pushLog = (kind: LogLine["kind"], msg: string) => setLogs((l) => [...l.slice(-400), { t: Date.now(), kind, msg }]);
   const commentOn = actions["comment"]?.on;
 
   const toggleAction = (id: string) => setActions((a) => ({ ...a, [id]: { ...a[id], on: !a[id].on } }));
-  const setQty = (id: string, v: number) => setActions((a) => ({ ...a, [id]: { ...a[id], qty: Math.max(0, v) } }));
+  const setQty = (id: string, v: number) => setActions((a) => {
+    const lim = limitOf(id);                       // 0=무제한
+    const capped = lim > 0 ? Math.min(Math.max(0, v), lim) : Math.max(0, v);
+    if (lim > 0 && v > lim) showToast?.(`${gsPlan !== "unlimited" ? GS_PLAN_LABEL[gsPlan] + " 등급 " : ""}상한 ${lim}회까지예요`, "info");
+    return { ...a, [id]: { ...a[id], qty: capped } };
+  });
 
   // ★트래픽 계승(2026-09-07 테리): '이어하기' 개념 제거 — 시작은 항상 새 설정으로 처음부터.
   //   (이어하기가 최초 설정을 물고 가서 수정한 설정이 무시되던 버그 방지.)
@@ -309,8 +334,12 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions }: { platfo
                   <span style={{ fontSize: 13, fontWeight: 700 }}>{d.icon} {d.label}</span>
                   {d.ai && <MascotBot size={16} style={{ marginLeft: "auto" }} />}
                 </div>
-                <input type="number" value={st.qty} min={0} disabled={!st.on} onChange={(e) => setQty(d.id, +e.target.value || 0)}
+                <input type="number" value={st.qty} min={0} max={limitOf(d.id) || undefined} disabled={!st.on} onChange={(e) => setQty(d.id, +e.target.value || 0)}
                   style={{ width: "100%", boxSizing: "border-box", padding: "5px 8px", borderRadius: 7, border: `1px solid ${T.line}`, background: dark ? "#0f0b15" : "#fff", color: T.ink, fontSize: 12.5, fontFamily: F_MONO, outline: "none", opacity: st.on ? 1 : 0.4 }} />
+                {/* 등급 물량 상한 표시(무제한=∞) */}
+                <div style={{ fontSize: 9.5, color: T.sub, marginTop: 3, fontWeight: 600, textAlign: "right" }}>
+                  상한 {limitOf(d.id) > 0 ? limitOf(d.id).toLocaleString() : "∞"}{gsPlan !== "unlimited" ? ` · ${GS_PLAN_LABEL[gsPlan]}` : ""}
+                </div>
                 {d.warn && st.on && <div style={{ fontSize: 9.5, color: "#ff9e6b", marginTop: 4, lineHeight: 1.3 }}>⚠️ {d.warn}</div>}
               </div>
             );
