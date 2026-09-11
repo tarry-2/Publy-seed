@@ -42,6 +42,14 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   const [appVersion, setAppVersion] = useState("");
   useEffect(() => { window.electron?.getAppVersion?.().then((v: string) => setAppVersion(v)).catch(() => {}); }, []);
 
+  // ── 📱 모바일 폭 감지(헤더 버튼이 좁은 화면에서 안 잘리게) ──
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 560);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 560);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
   // ── 🎫 라이선스(승인) 로드 — 승인된 tool·action 만 시딩 콘솔에서 켜짐 ──
   const [lics, setLics] = useState<ToolLicense[]>([]);
   const [licLoaded, setLicLoaded] = useState(false);
@@ -97,20 +105,21 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
       {/* 상단 골드 스트립 */}
       <div style={{ height: 3, flexShrink: 0, background: `linear-gradient(90deg,${T.gold},${T.goldDim} 60%,#8a6d28)` }} />
 
-      {/* 헤더 — 드래그로 창 이동(맥 hiddenInset). 좌측 78px=신호등 자리. 버튼·로고는 no-drag */}
-      <div style={{ height: 48, flexShrink: 0, display: "flex", alignItems: "center", gap: 10, padding: "0 12px 0 78px", borderBottom: `1px solid ${T.line}`, background: T.head, ["WebkitAppRegion" as any]: "drag" }}>
+      {/* 헤더 — 드래그로 창 이동(맥 hiddenInset). 좌측=신호등 자리(앱=78px, 모바일웹=12px). 버튼·로고는 no-drag */}
+      <div style={{ height: 48, flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: isMobile ? "0 8px" : "0 12px 0 78px", borderBottom: `1px solid ${T.line}`, background: T.head, ["WebkitAppRegion" as any]: "drag" }}>
         {/* 로고 C — 인라인(이미지 경로 X, Electron file:// 에서도 안 깨짐) */}
-        <div onClick={onLogoTap} style={{ width: 30, height: 30, borderRadius: 9, display: "grid", placeItems: "center", background: "linear-gradient(135deg,#f9dd86,#f5c451 55%,#c9a03f)", boxShadow: `0 4px 12px ${T.goldGlow}`, cursor: "pointer", userSelect: "none", ["WebkitAppRegion" as any]: "no-drag" }}>
+        <div onClick={onLogoTap} style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 9, display: "grid", placeItems: "center", background: "linear-gradient(135deg,#f9dd86,#f5c451 55%,#c9a03f)", boxShadow: `0 4px 12px ${T.goldGlow}`, cursor: "pointer", userSelect: "none", ["WebkitAppRegion" as any]: "no-drag" }}>
           <span style={{ fontFamily: "'Bebas Neue',Arial Black,sans-serif", fontSize: 22, fontWeight: 900, color: "#231a08", lineHeight: 1, marginTop: 1 }}>C</span>
         </div>
-        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: ".01em", fontFamily: F_DISPLAY }}>GoldenSeed <small style={{ color: T.sub, fontWeight: 600, marginLeft: 5, fontSize: 11 }}>· 시딩 엔진{appVersion ? ` v${appVersion}` : ""}</small></div>
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 9px", borderRadius: 99, background: "rgba(255,255,255,.03)", border: `1px solid ${T.line}`, fontSize: 10.5, fontWeight: 800, color: botOnline ? T.gold : T.sub }}>
-          <span style={{ width: 7, height: 7, borderRadius: "50%", background: botOnline ? T.gold : "#dc2626", animation: botOnline ? "pulseGold 1.4s infinite" : "none" }} />{botOnline ? "봇 온라인" : "봇 오프라인"}
+        <div style={{ fontSize: 14, fontWeight: 900, letterSpacing: ".01em", fontFamily: F_DISPLAY, whiteSpace: "nowrap" }}>GoldenSeed{!isMobile && <small style={{ color: T.sub, fontWeight: 600, marginLeft: 5, fontSize: 11 }}>· 시딩 엔진{appVersion ? ` v${appVersion}` : ""}</small>}</div>
+        {/* 봇 상태 배지 — 모바일에선 점만(글자 생략) */}
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: isMobile ? "5px" : "3px 9px", borderRadius: 99, background: "rgba(255,255,255,.03)", border: `1px solid ${T.line}`, fontSize: 10.5, fontWeight: 800, color: botOnline ? T.gold : T.sub, flexShrink: 0 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: botOnline ? T.gold : "#dc2626", animation: botOnline ? "pulseGold 1.4s infinite" : "none" }} />{!isMobile && (botOnline ? "봇 온라인" : "봇 오프라인")}
         </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", ["WebkitAppRegion" as any]: "no-drag" }}>
-          <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>{user.name || user.email}</span>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexShrink: 0, ["WebkitAppRegion" as any]: "no-drag" }}>
+          {!isMobile && <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>{user.name || user.email}</span>}
           <button onClick={onThemeToggle} title="라이트/다크" style={{ ...btn(T.panel, T.ink), padding: "6px 9px" }}>{dark ? "☀️" : "🌙"}</button>
-          <button onClick={onLogout} style={btn(T.panel, T.sub)}>로그아웃</button>
+          <button onClick={onLogout} style={{ ...btn(T.panel, T.sub), padding: isMobile ? "6px 9px" : "7px 14px" }}>{isMobile ? "↩" : "로그아웃"}</button>
         </div>
       </div>
 
