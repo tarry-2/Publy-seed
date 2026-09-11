@@ -23,6 +23,24 @@ type Platform = "youtube" | "instagram";
 type Nationality = "kr" | "foreign";
 type Gateway = "instagram" | "facebook" | "direct";
 type LogLine = { t: number; kind: "log" | "ok" | "err" | "sys"; msg: string };
+// 채널 불러오기 영상(봇 fetchChannelVideos 반환과 동일)
+type ChannelVideo = {
+  videoId: string; url: string; title: string; thumb: string;
+  type: "shorts" | "longform"; durationSec?: number; views?: number;
+  publishedAt?: number; publishedText?: string;
+};
+const GOLDEN_MS = 30 * 60 * 1000; // 골든아워 = 업로드 30분 이내
+const isGolden = (v: ChannelVideo) => v.publishedAt != null && Date.now() - v.publishedAt <= GOLDEN_MS;
+const fmtDur = (s?: number) => (s == null ? "" : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`);
+const fmtAgo = (v: ChannelVideo) => {
+  if (v.publishedAt == null) return v.publishedText || "";
+  const m = Math.floor((Date.now() - v.publishedAt) / 60000);
+  if (m < 1) return "방금";
+  if (m < 60) return `${m}분 전`;
+  const h = Math.floor(m / 60); if (h < 24) return `${h}시간 전`;
+  const d = Math.floor(h / 24); if (d < 30) return `${d}일 전`;
+  return `${Math.floor(d / 30)}개월 전`;
+};
 
 // 플랫폼별 콘텐츠 타입
 const CONTENT: Record<Platform, [string, string][]> = {
@@ -161,7 +179,32 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   };
 
   const [videoUrl, setVideoUrl] = useState("");
+  // 💾 저장된 URL 목록(플랫폼별, localStorage) — 다시 들어와도 유지, 클릭하면 바로 입력
+  const SAVED_KEY = `gs_saved_urls_${platform}`;
+  const [savedUrls, setSavedUrls] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem(SAVED_KEY) || "[]"); } catch { return []; }
+  });
+  const persistUrls = (list: string[]) => {
+    setSavedUrls(list);
+    try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch {}
+  };
+  const saveCurrentUrl = () => {
+    const u = videoUrl.trim();
+    if (!u) { showToast?.("먼저 URL을 입력하세요", "error"); return; }
+    if (savedUrls.includes(u)) { showToast?.("이미 저장된 링크예요", "info"); return; }
+    persistUrls([u, ...savedUrls].slice(0, 20));   // 최근 20개까지
+    showToast?.("링크를 저장했어요", "success");
+  };
+  const removeSavedUrl = (u: string) => persistUrls(savedUrls.filter(x => x !== u));
   const [contentType, setContentType] = useState<string>(isYt ? "shorts" : CONTENT[platform][0][0]);
+  // 📺 채널 불러오기(유튜브) — 채널 주소 → 영상목록(쇼츠/롱폼 분류) → 골라서 전체 시딩
+  const [channelUrl, setChannelUrl] = useState("");
+  const [channelLoading, setChannelLoading] = useState(false);
+  const [channelVideos, setChannelVideos] = useState<ChannelVideo[]>([]);
+  const [channelSubs, setChannelSubs] = useState<number | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<"recent" | "old">("recent");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const chanEsRef = useRef<BotEventStream | null>(null);
   const [nationality, setNationality] = useState<Nationality>("kr");
   const [gateway, setGateway] = useState<Gateway>(isYt ? "instagram" : "direct");
   const [watchSeconds, setWatchSeconds] = useState(60);
@@ -177,9 +220,11 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   const [stats, setStats] = useState({ views: 0, success: 0, fail: 0 });
   const [logZoom, setLogZoom] = useState(false);   // 🔍 로그 크게 보기(앱 내 모달, 트래픽 계승)
   // ⏱️ 골든아워 스케줄러 상태
-  const [ghTarget, setGhTarget] = useState(0);      // 이번 실행 목표 조회 물량
-  const [ghDone, setGhDone] = useState(0);          // 실행된 조회 수
+  const [ghTarget, setGhTarget] = useState(0);      // 현재 영상 목표 조회 물량
+  const [ghDone, setGhDone] = useState(0);          // 현재 영상 실행된 조회 수
   const [ghElapsed, setGhElapsed] = useState(0);    // 경과 초
+  const [queueIdx, setQueueIdx] = useState(0);      // 큐: 현재 영상 순번(1-based)
+  const [queueTotal, setQueueTotal] = useState(0);  // 큐: 전체 영상 수
   const GH_WINDOW = 30 * 60;                         // 골든아워 = 30분(초)
   const esRef = useRef<BotEventStream | null>(null);
   const jobRef = useRef<string>("");
@@ -187,7 +232,7 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   const schedRef = useRef<{ stop: boolean; timer: any; started: number }>({ stop: false, timer: null, started: 0 });
 
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
-  useEffect(() => () => { esRef.current?.close(); }, []);
+  useEffect(() => () => { esRef.current?.close(); chanEsRef.current?.close(); }, []);
 
   // 골든아워 실행 중 경과초 1초마다 갱신(진행바·남은시간)
   useEffect(() => {
@@ -225,7 +270,14 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   //   (이어하기가 최초 설정을 물고 가서 수정한 설정이 무시되던 버그 방지.)
   function start() {
     if (running) return;
-    if (!videoUrl.trim()) { showToast?.("URL을 입력하세요", "error"); return; }
+    // 🎯 대상 영상 큐: 채널에서 선택한 게 있으면 그걸 순차, 없으면 단일 URL(기존 동작)
+    const chosen: { url: string; type: "shorts" | "longform" }[] =
+      (isYt && selectedIds.size > 0)
+        ? sortedVideos.filter((v) => selectedIds.has(v.videoId)).map((v) => ({ url: v.url, type: v.type }))
+        : videoUrl.trim()
+          ? [{ url: videoUrl.trim(), type: (contentType === "longform" ? "longform" : "shorts") }]
+          : [];
+    if (!chosen.length) { showToast?.(isYt ? "영상을 선택하거나 URL을 입력하세요" : "URL을 입력하세요", "error"); return; }
     const picked = defs.filter((d) => actions[d.id]?.on && actions[d.id].qty > 0);
     if (!picked.length) { showToast?.("실행할 액션을 하나 이상 켜세요", "error"); return; }
     if (commentOn && !aiKey.trim()) { showToast?.("댓글은 AI 키가 필요해요", "error"); return; }
@@ -236,8 +288,9 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     setRunning(true);
 
     // ── 디테일 로그(1~N) — 트래픽처럼 단계별로 상세하게 ──
-    pushLog("sys", `▶️ 시딩 시작 — ${isYt ? "유튜브" : "인스타"} · ${CONTENT[platform].find((c) => c[0] === contentType)?.[1]}`);
-    pushLog("log", `🌐 대상 URL: ${videoUrl.trim()}`);
+    pushLog("sys", `▶️ 시딩 시작 — ${isYt ? "유튜브" : "인스타"} · 대상 ${chosen.length}개 영상`);
+    if (chosen.length === 1) pushLog("log", `🌐 대상 URL: ${chosen[0].url}`);
+    else pushLog("log", `🌐 선택한 ${chosen.length}개 영상을 순차 시딩(영상마다 골든아워 곡선)`);
     pushLog("log", `🧭 게이트웨이: ${gateway === "instagram" ? "인스타 referrer" : gateway === "facebook" ? "페북 referrer" : "직접"} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
@@ -246,16 +299,34 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     // 조회(view)만 실제 봇 연동(STEP1). 나머지는 계정 붙는대로 순차 연결.
     if (actions["view"]?.on && actions["view"].qty > 0) {
       const total = actions["view"].qty;
-      setGhTarget(total); setGhDone(0); setGhElapsed(0);
-      schedRef.current = { stop: false, timer: null, started: Date.now() };
-      pushLog("sys", `⏱️ 골든아워 스케줄러 시작 — 30분에 걸쳐 조회 ${total}회를 자연 성장곡선(초반 집중→테이퍼링)으로 시딩합니다`);
-      runGoldenHour(total, jobId);
+      pushLog("sys", `⏱️ 골든아워 스케줄러 시작 — 영상당 조회 ${total}회를 30분 자연 성장곡선(초반 집중→테이퍼링)으로 시딩${chosen.length > 1 ? ` · 총 ${chosen.length}개 순차` : ""}`);
+      runQueue(chosen, total, jobId);
     } else {
       pushLog("sys", "ℹ️ 조회 외 액션은 계정 워밍업(STEP2+) 후 연결됩니다 — 물량 설정은 저장돼요.");
       setRunning(false);
     }
     // 조회 외 선택 액션 안내(구현 예정)
     picked.filter((d) => d.id !== "view").forEach((d) => pushLog("log", `⏳ ${d.icon} ${d.label} ×${actions[d.id].qty} — 준비 중(계정 연결 후 실행)`));
+  }
+
+  // 🎬 영상 큐 — 선택한 영상들을 하나씩(순차) 골든아워 곡선으로 시딩(안전·티 덜 남)
+  function runQueue(queue: { url: string; type: "shorts" | "longform" }[], perVideoTotal: number, jobId: string) {
+    setQueueTotal(queue.length);
+    let vi = 0;
+    const runVideo = () => {
+      if (schedRef.current.stop) { setRunning(false); return; }
+      if (vi >= queue.length) {
+        pushLog("ok", `🎉 전체 시딩 완료 — 영상 ${queue.length}개 · 조회 ${queue.length * perVideoTotal}회 시딩`);
+        setRunning(false); return;
+      }
+      const cur = queue[vi];
+      setQueueIdx(vi + 1);
+      setGhTarget(perVideoTotal); setGhDone(0); setGhElapsed(0);
+      schedRef.current = { stop: false, timer: null, started: Date.now() };
+      if (queue.length > 1) pushLog("sys", `━━━ 영상 ${vi + 1}/${queue.length} 시작 — ${cur.url} ━━━`);
+      runGoldenHour(cur, perVideoTotal, jobId + "_v" + vi, () => { vi += 1; runVideo(); });
+    };
+    runVideo();
   }
 
   // ⏱️ 골든아워 곡선 — 30분 창을 n개 조회로 나누되 초반 집중→후반 성김(자연 성장곡선, 레드라인 회피).
@@ -267,14 +338,14 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     return Math.floor(frac * GH_WINDOW * 0.85 * 1000); // ms
   }
 
-  // 다음 조회를 곡선 시각에 맞춰 예약 실행(순차)
-  function runGoldenHour(total: number, jobId: string) {
+  // 한 영상의 골든아워 곡선 실행(순차). 영상 물량 다 채우면 onVideoDone으로 다음 영상.
+  function runGoldenHour(video: { url: string; type: "shorts" | "longform" }, total: number, jobId: string, onVideoDone: () => void) {
     let done = 0;
     const runNext = () => {
       if (schedRef.current.stop) { setRunning(false); return; }
       if (done >= total) {
-        pushLog("ok", `🎉 골든아워 시딩 완료 — 조회 ${done}회 (성공 곡선대로 시딩됨)`);
-        setRunning(false); return;
+        pushLog("ok", `${queueTotal > 1 ? "  " : ""}✅ 이 영상 골든아워 완료 — 조회 ${done}회`);
+        onVideoDone(); return;
       }
       const idx = done;   // 0-based
       const started = schedRef.current.started;
@@ -285,17 +356,17 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
         setGhElapsed(Math.floor((Date.now() - started) / 1000));
         // 📊 몇 번째 시작 / 목표 / 완료 / 남음 — 매번 명확히 표시
         pushLog("sys", `▶️ ${idx + 1}번째 시작 · 목표 ${total} · 완료 ${done} · 남음 ${total - done}`);
-        runOneView(jobId + "_" + idx, () => { done += 1; setGhDone(done); runNext(); });
+        runOneView(video, jobId + "_" + idx, () => { done += 1; setGhDone(done); runNext(); });
       }, waitMs);
     };
     runNext();
   }
 
   // 조회 1건 실행(SSE) — 끝나면 onDone 콜백으로 다음 예약. 플랫폼별 봇/파라미터.
-  function runOneView(jobId: string, onDone: () => void) {
+  function runOneView(video: { url: string; type: "shorts" | "longform" }, jobId: string, onDone: () => void) {
     const q = isYt
-      ? new URLSearchParams({ videoUrl: videoUrl.trim(), videoType: contentType === "longform" ? "longform" : "shorts", gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId })
-      : new URLSearchParams({ postUrl: videoUrl.trim(), contentType, gateway, watchSeconds: String(watchSeconds || 30), nationality, headful: visible ? "1" : "0", jobId });
+      ? new URLSearchParams({ videoUrl: video.url, videoType: video.type, gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId })
+      : new URLSearchParams({ postUrl: video.url, contentType, gateway, watchSeconds: String(watchSeconds || 30), nationality, headful: visible ? "1" : "0", jobId });
     jobRef.current = jobId;
     try {
       const es = new BotEventStream(`${BOT}/api/seed/view?${q}`, { method: "GET" });
@@ -317,6 +388,44 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     } catch (e: any) { pushLog("err", `❌ 실행 실패: ${e.message}`); onDone(); }
   }
 
+  // 📺 채널 주소 → 영상목록 불러오기(SSE). 완료 시 골든아워 영상 자동 선택.
+  function loadChannel() {
+    const u = channelUrl.trim();
+    if (!u) { showToast?.("채널 주소를 입력하세요", "error"); return; }
+    if (channelLoading) return;
+    setChannelLoading(true);
+    setChannelVideos([]); setSelectedIds(new Set()); setChannelSubs(undefined);
+    pushLog("sys", `📺 채널 불러오기 시작 — ${u} (RSS+스크래핑 혼합, 오래 걸릴 수 있어요)`);
+    const q = new URLSearchParams({ channelUrl: u, nationality });
+    const es = new BotEventStream(`${YT_BOT}/api/channel/videos?${q}`, { method: "GET" });
+    chanEsRef.current = es;
+    let done = false;
+    const finish = () => { if (done) return; done = true; es.close(); chanEsRef.current = null; setChannelLoading(false); };
+    es.onmessage = (ev) => {
+      try {
+        const d = JSON.parse(ev.data);
+        if (d.type === "log") pushLog("log", d.msg);
+        else if (d.type === "channel_done") {
+          const vids: ChannelVideo[] = d.videos || [];
+          setChannelVideos(vids);
+          setChannelSubs(d.subscribers);
+          const golden = vids.filter(isGolden).map((v) => v.videoId);
+          setSelectedIds(new Set(golden));   // 골든아워(30분 이내) 자동 선택
+          const nShorts = vids.filter((v) => v.type === "shorts").length;
+          pushLog("ok", `✅ ${vids.length}개 불러옴 (쇼츠 ${nShorts}·롱폼 ${vids.length - nShorts})${d.subscribers != null ? ` · 구독자 ${Number(d.subscribers).toLocaleString()}` : ""}${golden.length ? ` · 🔥골든아워 ${golden.length}개 자동선택` : ""}`);
+          finish();
+        } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); finish(); }
+      } catch {}
+    };
+    es.onerror = (detail: any) => { pushLog("err", `⚠️ 채널 불러오기 실패 — ${detail || "youtube-bot(3366) 실행 확인"}`); finish(); };
+  }
+  // 선택 헬퍼
+  const toggleSel = (id: string) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const selectAll = () => setSelectedIds(new Set(channelVideos.map((v) => v.videoId)));
+  const selectNone = () => setSelectedIds(new Set());
+  const selectType = (t: "shorts" | "longform") => setSelectedIds(new Set(channelVideos.filter((v) => v.type === t).map((v) => v.videoId)));
+  const selectGolden = () => setSelectedIds(new Set(channelVideos.filter(isGolden).map((v) => v.videoId)));
+
   function stop() {
     schedRef.current.stop = true;
     if (schedRef.current.timer) { clearTimeout(schedRef.current.timer); schedRef.current.timer = null; }
@@ -330,6 +439,16 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
       .then(() => showToast?.("로그를 복사했어요", "success")).catch(() => showToast?.("복사 실패", "error"));
   };
   const clearLog = () => setLogs([{ t: Date.now(), kind: "sys", msg: "로그를 비웠어요." }]);
+
+  // 📺 채널 영상 정렬/분리(최근순·오래된순 + 🔥골든아워/쇼츠/롱폼 섹션)
+  const sortedVideos = [...channelVideos].sort((a, b) => {
+    const ta = a.publishedAt ?? -1, tb = b.publishedAt ?? -1;
+    return sortOrder === "recent" ? tb - ta : ta - tb;
+  });
+  const goldenList = sortedVideos.filter(isGolden);
+  const shortsList = sortedVideos.filter((v) => v.type === "shorts" && !isGolden(v));
+  const longList = sortedVideos.filter((v) => v.type === "longform" && !isGolden(v));
+  const selCount = selectedIds.size;
 
   // 📊 목표/완료/남음 — 실행 중이든 아니든 항상 표시(테리 지시). 대기 상태면 켠 조회 물량을 목표로 미리보기.
   const previewTarget = actions["view"]?.on ? (actions["view"].qty || 0) : 0;
@@ -367,7 +486,7 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
         return (
           <div style={{ background: `linear-gradient(140deg,${T.panel2},${T.panel})`, border: `1px solid ${T.gold}`, borderRadius: 14, padding: "13px 15px", marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.gold }}>⏱️ 골든아워 진행 중</span>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.gold }}>⏱️ 골든아워 진행 중{queueTotal > 1 ? ` · 영상 ${queueIdx}/${queueTotal}` : ""}</span>
               <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>조회 {ghDone}/{ghTarget}회 · 초반 집중→테이퍼링</span>
               <span style={{ marginLeft: "auto", fontFamily: F_MONO, fontSize: 13, fontWeight: 800, color: T.ink }}>남은 {mm}:{ss}</span>
             </div>
@@ -383,11 +502,91 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
         );
       })()}
 
+      {/* 📺 채널 영상 불러오기 (유튜브 전용) — 채널 주소 → 목록 → 골라서 전체 시딩 */}
+      {isYt && (
+        <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
+          <div style={{ fontSize: 12.5, fontWeight: 800, color: T.gold, marginBottom: 4, display: "flex", alignItems: "center", gap: 6 }}>
+            📺 내 채널 영상 불러오기
+          </div>
+          <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 10, lineHeight: 1.5 }}>
+            채널 주소(@핸들·/channel/… 등)를 넣으면 영상을 <b style={{ color: T.ink }}>쇼츠/롱폼으로 나눠</b> 불러와요.
+            🔥골든아워(업로드 30분 이내)는 <b style={{ color: T.ink }}>자동 선택</b>돼요. 골라서(또는 전체) 한 번에 시딩합니다.
+          </div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+            <input value={channelUrl} onChange={(e) => setChannelUrl(e.target.value)}
+              placeholder="유튜브 채널 주소 (예: youtube.com/@핸들)"
+              style={{ flex: 1, minWidth: 180, boxSizing: "border-box", padding: "11px 13px", borderRadius: 11, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink, fontSize: 13.5, fontFamily: F_BODY, outline: "none" }} />
+            <button onClick={loadChannel} disabled={channelLoading}
+              style={{ flexShrink: 0, padding: "0 16px", borderRadius: 11, border: `1px solid ${T.gold}`, background: channelLoading ? T.panel2 : T.gold, color: channelLoading ? T.sub : "#1a1408", fontSize: 13, fontWeight: 800, cursor: channelLoading ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+              {channelLoading ? "⏳ 불러오는 중…" : "📥 영상 불러오기"}
+            </button>
+          </div>
+
+          {channelVideos.length > 0 && (
+            <>
+              {/* 상단 바: 구독자 · 정렬 · 전체선택 */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                {channelSubs != null && <span style={{ fontSize: 11, color: T.sub }}>👥 구독자 <b style={{ color: T.ink }}>{channelSubs.toLocaleString()}</b></span>}
+                <span style={{ fontSize: 11, color: T.sub }}>총 <b style={{ color: T.ink }}>{channelVideos.length}</b>개</span>
+                <div style={{ marginLeft: "auto", display: "flex", gap: 4, background: T.panel2, borderRadius: 9, padding: 3, border: `1px solid ${T.line}` }}>
+                  {([["recent", "최근순"], ["old", "오래된순"]] as [("recent" | "old"), string][]).map(([v, lbl]) => (
+                    <button key={v} onClick={() => setSortOrder(v)} style={{ padding: "5px 11px", borderRadius: 7, border: "none", cursor: "pointer", background: sortOrder === v ? T.gold : "transparent", color: sortOrder === v ? "#1a1408" : T.sub, fontWeight: 700, fontSize: 11.5 }}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
+              {/* 선택 버튼바 */}
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+                <SelBtn onClick={selectAll} T={T}>전체지정</SelBtn>
+                <SelBtn onClick={selectNone} T={T}>전체해제</SelBtn>
+                <SelBtn onClick={() => selectType("shorts")} T={T}>🎬 쇼츠만</SelBtn>
+                <SelBtn onClick={() => selectType("longform")} T={T}>▶️ 롱폼만</SelBtn>
+                {goldenList.length > 0 && <SelBtn onClick={selectGolden} T={T} accent>🔥 골든아워만</SelBtn>}
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: T.gold, fontWeight: 800, alignSelf: "center" }}>
+                  선택 {selCount}개{selCount > 0 ? ` · 예상 약 ${selCount * 30}분(순차)` : ""}
+                </span>
+              </div>
+              {/* 리스트 — 🔥골든아워 / 쇼츠 / 롱폼 */}
+              <div style={{ maxHeight: 320, overflowY: "auto", paddingRight: 2 }}>
+                {goldenList.length > 0 && (
+                  <VideoSection title="🔥 골든아워 (지금 밀면 노출 최대)" color={T.gold} list={goldenList} selectedIds={selectedIds} onToggle={toggleSel} T={T} golden />
+                )}
+                {shortsList.length > 0 && (
+                  <VideoSection title="🎬 쇼츠" color={T.yt} list={shortsList} selectedIds={selectedIds} onToggle={toggleSel} T={T} />
+                )}
+                {longList.length > 0 && (
+                  <VideoSection title="▶️ 롱폼" color={T.ink} list={longList} selectedIds={selectedIds} onToggle={toggleSel} T={T} />
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {/* 실행 패널 */}
       <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
-        <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)}
-          placeholder={isYt ? "유튜브 영상/쇼츠 URL 붙여넣기" : "인스타 게시물/릴스 URL 붙여넣기"}
-          style={{ width: "100%", boxSizing: "border-box", padding: "11px 13px", borderRadius: 11, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink, fontSize: 13.5, fontFamily: F_BODY, outline: "none", marginBottom: 12 }} />
+        <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 8 }}>{isYt ? "또는 영상 URL 하나만 직접 시딩" : "게시물 URL"}</div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+          <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)}
+            placeholder={isYt ? "유튜브 영상/쇼츠 URL 붙여넣기" : "인스타 게시물/릴스 URL 붙여넣기"}
+            style={{ flex: 1, minWidth: 0, boxSizing: "border-box", padding: "11px 13px", borderRadius: 11, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink, fontSize: 13.5, fontFamily: F_BODY, outline: "none" }} />
+          <button onClick={saveCurrentUrl} title="이 링크 저장" style={{ flexShrink: 0, padding: "0 14px", borderRadius: 11, border: `1px solid ${T.gold}`, background: T.goldGlow, color: T.gold, fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>💾 저장</button>
+        </div>
+
+        {/* 💾 저장된 링크 — 클릭하면 바로 입력(매번 붙여넣기 안 해도 됨) */}
+        {savedUrls.length > 0 && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 6, fontWeight: 700 }}>💾 저장된 링크 (클릭하면 바로 넣어요)</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+              {savedUrls.map((u) => (
+                <div key={u} style={{ display: "flex", alignItems: "center", gap: 6, background: videoUrl === u ? T.goldGlow : T.panel2, border: `1px solid ${videoUrl === u ? T.gold : T.line}`, borderRadius: 9, padding: "7px 9px" }}>
+                  <span onClick={() => setVideoUrl(u)} title={u} style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.ink, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: F_MONO }}>{u}</span>
+                  <button onClick={() => setVideoUrl(u)} style={{ flexShrink: 0, padding: "3px 9px", borderRadius: 7, border: "none", background: T.gold, color: "#1a1408", fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>넣기</button>
+                  <button onClick={() => removeSavedUrl(u)} title="삭제" style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 7, border: `1px solid ${T.line}`, background: "transparent", color: T.sub, fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
           <Seg label="콘텐츠" value={contentType} opts={CONTENT[platform]} onPick={setContentType} accent={accent} T={T} />
@@ -528,6 +727,54 @@ function LogBtn({ children, onClick, T, title, active, accent, danger }: any) {
       padding: "4px 9px", borderRadius: 7, border: `1px solid ${border}`, background: bg, color,
       fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap",
     }}>{children}</button>
+  );
+}
+
+// 선택 버튼(전체지정/해제 등)
+function SelBtn({ children, onClick, T, accent }: any) {
+  return (
+    <button onClick={onClick} style={{
+      padding: "6px 11px", borderRadius: 8, cursor: "pointer", fontSize: 11.5, fontWeight: 800, fontFamily: "inherit",
+      border: `1px solid ${accent ? T.gold : T.line}`, background: accent ? T.goldGlow : T.panel2, color: accent ? T.gold : T.ink,
+    }}>{children}</button>
+  );
+}
+
+// 영상 섹션(🔥골든아워/쇼츠/롱폼) — 체크박스 리스트
+function VideoSection({ title, color, list, selectedIds, onToggle, T, golden }: {
+  title: string; color: string; list: ChannelVideo[]; selectedIds: Set<string>; onToggle: (id: string) => void; T: any; golden?: boolean;
+}) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 11.5, fontWeight: 800, color, margin: "6px 0 6px" }}>{title} ({list.length})</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {list.map((v) => {
+          const on = selectedIds.has(v.videoId);
+          return (
+            <div key={v.videoId} onClick={() => onToggle(v.videoId)} title={v.title} style={{
+              display: "flex", alignItems: "center", gap: 9, padding: "6px 8px", borderRadius: 10, cursor: "pointer",
+              border: `1px solid ${on ? T.gold : T.line}`, background: on ? T.goldGlow : T.panel2, transition: "all .12s",
+            }}>
+              <span style={{
+                width: 17, height: 17, flexShrink: 0, borderRadius: 5, border: `1.5px solid ${on ? T.gold : T.sub}`,
+                background: on ? T.gold : "transparent", color: "#1a1408", fontSize: 11, fontWeight: 900,
+                display: "grid", placeItems: "center",
+              }}>{on ? "✓" : ""}</span>
+              <img src={v.thumb} alt="" style={{ width: 64, height: 36, flexShrink: 0, objectFit: "cover", borderRadius: 6, background: T.line }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, color: T.ink, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</div>
+                <div style={{ fontSize: 10, color: T.sub, marginTop: 2, display: "flex", gap: 7, flexWrap: "wrap" }}>
+                  {golden && <span style={{ color: T.gold, fontWeight: 800 }}>🔥 {fmtAgo(v)}</span>}
+                  {!golden && fmtAgo(v) && <span>{fmtAgo(v)}</span>}
+                  {v.durationSec != null && <span>⏱ {fmtDur(v.durationSec)}</span>}
+                  {v.views != null && <span>👁 {v.views.toLocaleString()}</span>}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

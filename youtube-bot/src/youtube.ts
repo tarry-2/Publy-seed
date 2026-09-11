@@ -145,6 +145,236 @@ async function ensurePlaying(page: Page): Promise<number> {
     .catch(() => 0);
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  채널 영상목록 불러오기 (A+B 혼합) — 쇼츠/롱폼 분류 + 메타 수집
+//  ★ 분류 기준(테리 확정): 유튜브 공식 분류(어느 탭)를 1차로 따르고,
+//    재생시간 179초(2:59) 상한으로 보정한다(2024-10-15 쇼츠 3분 규칙).
+//    - 쇼츠 = /shorts 탭 & duration ≤ 179s
+//    - 롱폼 = /videos 탭  (또는 쇼츠탭이라도 duration > 179s면 강등)
+//  ★ 수익화(YPP) 브리핑 재활용 위해 구독자수 + 영상별 조회수도 같이 긁는다.
+// ═══════════════════════════════════════════════════════════════
+export const SHORTS_MAX_SEC = 179; // 2:59 — 이 이하만 쇼츠(그 초과는 롱폼)
+
+export interface ChannelVideo {
+  videoId: string;
+  url: string;
+  title: string;
+  thumb: string;                 // videoId로 생성(항상 확보)
+  type: "shorts" | "longform";
+  durationSec?: number;          // 재생시간(초) — 분류 보정 + 표시
+  views?: number;                // 조회수(근사) — 수익화 브리핑용
+  publishedAt?: number;          // epoch ms(RSS 정확). 골든아워 30분 판정
+  publishedText?: string;        // 스크래핑 상대시간("3시간 전")
+}
+
+const DESKTOP_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+// 채널 URL 정규화 → 탭 없는 베이스(끝에 /videos·/shorts 붙일 수 있게)
+function normalizeChannelBase(input: string): string {
+  let s = (input || "").trim();
+  if (!/^https?:\/\//.test(s)) {
+    if (s.startsWith("@")) s = "https://www.youtube.com/" + s;
+    else s = "https://www.youtube.com/" + s.replace(/^\//, "");
+  }
+  s = s.replace(/\/(videos|shorts|streams|featured|community|playlists|about|home)\/?(\?.*)?$/i, "");
+  s = s.replace(/\?.*$/, "").replace(/\/$/, "");
+  return s;
+}
+
+// "1:23" / "12:34" / "1:02:03" → 초
+function parseDuration(text: string): number | undefined {
+  const m = (text || "").trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!m) return undefined;
+  return m[3] ? (+m[1]) * 3600 + (+m[2]) * 60 + (+m[3]) : (+m[1]) * 60 + (+m[2]);
+}
+
+// "조회수 1.2만회" / "1.2M views" / "1,234회" → 숫자(근사)
+function parseViews(text: string): number | undefined {
+  const t = (text || "").replace(/조회수|views?|,/gi, "").trim();
+  const m = t.match(/([\d.]+)\s*(억|만|천|[KMB])?/i);
+  if (!m) return undefined;
+  const n = parseFloat(m[1]); if (isNaN(n)) return undefined;
+  const unit = (m[2] || "").toUpperCase();
+  const mult: Record<string, number> = { "억": 1e8, "만": 1e4, "천": 1e3, K: 1e3, M: 1e6, B: 1e9 };
+  return Math.round(n * (mult[unit] || 1));
+}
+
+// 채널 탭 1개 스크래핑 — DOM의 a[href]에서 videoId 수집(셀렉터 변화에 강함)
+async function scrapeChannelTab(
+  page: Page, url: string, tabType: "shorts" | "longform", onLog: (m: string) => void
+): Promise<Array<{ videoId: string; title: string; durationText: string; viewsText: string; metaText: string }>> {
+  onLog(`  ↳ ${tabType === "shorts" ? "쇼츠" : "동영상"} 탭 스크래핑… (${url})`);
+  await page.goto(url, { waitUntil: "commit", timeout: 60000 }).catch(() => {});
+  await page.waitForLoadState("domcontentloaded", { timeout: 20000 }).catch(() => {});
+  await dismissConsent(page);
+  await page.waitForTimeout(1200);
+  // 여러 번 스크롤해 더 로드(오래 걸려도 최대한 많이)
+  for (let i = 0; i < 5; i++) {
+    await page.mouse.wheel(0, 4000).catch(() => {});
+    await page.waitForTimeout(800);
+  }
+  return await page.evaluate(() => {
+    const DUR_RE = /^\d{1,2}:\d{2}(:\d{2})?$/;             // "mm:ss" / "h:mm:ss"
+    const clean = (s: string) => (s || "").replace(/\s+/g, " ").trim();
+    const out: Array<{ videoId: string; title: string; durationText: string; viewsText: string; metaText: string }> = [];
+    const seen = new Set<string>();
+    const anchors = Array.from(document.querySelectorAll("a[href]"));
+    for (const a of anchors) {
+      const href = a.getAttribute("href") || "";
+      const w = href.match(/\/watch\?v=([\w-]{11})/);
+      const s = href.match(/\/shorts\/([\w-]{11})/);
+      const id = w ? w[1] : s ? s[1] : "";
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      const card = (a.closest(
+        "ytd-rich-item-renderer, ytd-grid-video-renderer, ytd-video-renderer, ytm-shorts-lockup-view-model, ytd-reel-item-renderer, ytd-rich-grid-media, yt-lockup-view-model"
+      ) || a.parentElement) as Element | null;
+
+      // 제목 — 제목 전용 요소를 우선(썸네일 링크는 제목 텍스트가 없어 duration을 잘못 집던 문제 수정)
+      let title = "";
+      if (card) {
+        const cand = card.querySelector(
+          "#video-title, #video-title-link, a#video-title-link, h3 a, h3, .yt-lockup-metadata-view-model-wiz__title, .shortsLockupViewModelHostMetadataTitle"
+        );
+        title = clean(cand?.getAttribute("title") || cand?.textContent || "");
+      }
+      // 폴백: 링크 자체의 title/aria-label(쇼츠는 aria-label에 "제목 · 조회수…" → 메타 앞부분만)
+      if (!title || DUR_RE.test(title)) {
+        let alt = a.getAttribute("title") || a.getAttribute("aria-label") || "";
+        alt = alt.split(/\s*[,·]\s*(?=조회수|[\d.,]+\s*(?:억|만|천|[KMB])?\s*회|[\d.,]+\s*[KMB]?\s*views)/i)[0];
+        title = clean(alt);
+      }
+      if (DUR_RE.test(title)) title = "";   // 그래도 duration이면 제목 없음 처리
+
+      // 재생시간(mm:ss 패턴 텍스트) — 카드 안에서 탐색
+      let durationText = "";
+      if (card) {
+        for (const el of Array.from(card.querySelectorAll("span, div"))) {
+          const tx = (el.textContent || "").trim();
+          if (DUR_RE.test(tx)) { durationText = tx; break; }
+        }
+      }
+      // 메타(조회수·N일 전)
+      const metaEl = card?.querySelector("#metadata-line, .inline-metadata-item, .yt-content-metadata-view-model-wiz__metadata-row");
+      const metaText = clean(metaEl?.textContent || card?.textContent?.slice(0, 160) || "");
+      const viewsText = (metaText.match(/[\d.,]+\s*(억|만|천|[KMB])?\s*(회|views?)/i) || [""])[0];
+      out.push({ videoId: id, title, durationText, viewsText, metaText });
+    }
+    return out;
+  });
+}
+
+// 채널 구독자수 긁기(공개) — "구독자 1.2만명" / "1.2M subscribers"
+async function scrapeSubscribers(page: Page): Promise<number | undefined> {
+  const txt = await page.evaluate(() => {
+    const el = document.querySelector(
+      "#subscriber-count, yt-formatted-string#subscriber-count, .yt-content-metadata-view-model-wiz__metadata-row"
+    ) as HTMLElement | null;
+    const body = document.body?.innerText || "";
+    return (el?.textContent || "") + " || " + body;
+  }).catch(() => "");
+  const m = (txt || "").match(/구독자\s*([\d.,]+\s*(?:억|만|천)?)\s*명|([\d.,]+\s*[KMB]?)\s*subscribers?/i);
+  if (!m) return undefined;
+  return parseViews(m[1] || m[2] || "");
+}
+
+// RSS로 정확한 업로드 시각 보강(최근 15개) — node fetch, 프록시 불필요
+async function fetchChannelRss(channelId: string): Promise<Array<{ videoId: string; publishedAt: number }>> {
+  try {
+    const resp = await fetch(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
+    if (!resp.ok) return [];
+    const xml = await resp.text();
+    const out: Array<{ videoId: string; publishedAt: number }> = [];
+    for (const e of xml.split("<entry>").slice(1)) {
+      const id = (e.match(/<yt:videoId>([\w-]+)<\/yt:videoId>/) || [])[1];
+      const pub = (e.match(/<published>([^<]+)<\/published>/) || [])[1];
+      if (id && pub) { const t = Date.parse(pub); if (!isNaN(t)) out.push({ videoId: id, publishedAt: t }); }
+    }
+    return out;
+  } catch { return []; }
+}
+
+export async function fetchChannelVideos(params: {
+  channelUrl: string;
+  nationality?: "kr" | "foreign";
+  proxy?: ProxyConfig;
+  headful?: boolean;
+  onLog?: (m: string) => void;
+}): Promise<{ channelId?: string; subscribers?: number; videos: ChannelVideo[] }> {
+  const onLog = params.onLog || (() => {});
+  const base = normalizeChannelBase(params.channelUrl);
+  onLog(`🌐 채널 불러오기 시작 — ${base}`);
+
+  // 프록시(seedView와 동일 정책: 국적 매칭 + sticky)
+  let proxy: PxConfig | null = params.proxy || (await getProxyForNationality(params.nationality || "kr"));
+  proxy = stickifyDataImpulse(proxy);
+  onLog(proxy ? `🔒 프록시 ${maskProxy(proxy)}` : `⚠️ 프록시 미배정 — 내 IP로 목록 조회`);
+
+  // 목록 스크래핑용 데스크탑 컨텍스트(LAUNCH_ARGS 재사용 = http2 off 포함)
+  const browser = await chromium.launch({
+    headless: params.headful !== true,
+    args: LAUNCH_ARGS,
+    proxy: proxy ? { server: proxy.server, username: proxy.username, password: proxy.password } : undefined,
+  });
+  const context = await browser.newContext({
+    userAgent: DESKTOP_UA, viewport: { width: 1280, height: 900 }, locale: "ko-KR", timezoneId: "Asia/Seoul",
+  });
+  await context.addInitScript(ANTI_DETECTION_SCRIPT);
+  const page = await context.newPage();
+  const map = new Map<string, ChannelVideo>();
+
+  try {
+    // 쇼츠 탭 먼저(중복 시 쇼츠 우선) → 동영상 탭
+    const shortsRaw = await scrapeChannelTab(page, `${base}/shorts`, "shorts", onLog);
+    const subscribers = await scrapeSubscribers(page).catch(() => undefined);
+    const videosRaw = await scrapeChannelTab(page, `${base}/videos`, "longform", onLog);
+
+    for (const [tabType, raw] of [["shorts", shortsRaw], ["longform", videosRaw]] as const) {
+      for (const it of raw) {
+        if (map.has(it.videoId)) continue;
+        const durationSec = parseDuration(it.durationText);
+        // 분류: 탭 기준 + 2:59 상한 보정(쇼츠탭이라도 179s 초과면 롱폼)
+        let type: "shorts" | "longform" = tabType;
+        if (type === "shorts" && durationSec != null && durationSec > SHORTS_MAX_SEC) type = "longform";
+        map.set(it.videoId, {
+          videoId: it.videoId,
+          url: type === "shorts" ? `https://www.youtube.com/shorts/${it.videoId}` : `https://www.youtube.com/watch?v=${it.videoId}`,
+          title: it.title || "(제목 없음)",
+          thumb: `https://i.ytimg.com/vi/${it.videoId}/mqdefault.jpg`,
+          type,
+          durationSec,
+          views: parseViews(it.viewsText || it.metaText),
+          publishedText: (it.metaText.match(/(방금|[\d]+\s*(초|분|시간|일|주|개월|년)\s*전|[\d]+\s*(second|minute|hour|day|week|month|year)s?\s*ago)/i) || [])[0] || undefined,
+        });
+      }
+    }
+
+    // channelId 추출 → RSS로 최근 15개 정확 시각 보강(골든아워 30분 판정)
+    let channelId = (base.match(/\/channel\/(UC[\w-]+)/) || [])[1];
+    if (!channelId) {
+      const html = await page.content().catch(() => "");
+      channelId = (html.match(/"channelId":"(UC[\w-]+)"/) || [])[1] || (html.match(/channel\/(UC[\w-]+)/) || [])[1];
+    }
+    if (channelId) {
+      onLog(`  ↳ RSS로 업로드 시각 보강(최근 15개)…`);
+      for (const r of await fetchChannelRss(channelId)) {
+        const v = map.get(r.videoId); if (v) v.publishedAt = r.publishedAt;
+      }
+    }
+
+    const videos = [...map.values()];
+    const nShorts = videos.filter((v) => v.type === "shorts").length;
+    onLog(`✅ 불러오기 완료 — 총 ${videos.length}개 (쇼츠 ${nShorts} · 롱폼 ${videos.length - nShorts})${subscribers != null ? ` · 구독자 ${subscribers.toLocaleString()}` : ""}`);
+    await browser.close().catch(() => {});
+    return { channelId, subscribers, videos };
+  } catch (e: any) {
+    await browser.close().catch(() => {});
+    onLog(`❌ 채널 불러오기 실패: ${e.message}`);
+    throw e;
+  }
+}
+
 // ── 조회 시딩(무계정) — 게이트웨이 referrer + watch time ──────────
 //  쇼츠: 완주+루프(완주율 신호) / 롱폼: 목표 시청초 체류(watch time 신호)
 export async function seedView(params: {

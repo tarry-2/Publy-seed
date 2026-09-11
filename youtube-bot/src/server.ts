@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import { seedView, ProxyConfig } from "./youtube";
+import { seedView, fetchChannelVideos, ProxyConfig } from "./youtube";
 
 // ─────────────────────────────────────────────────────────────
 //  youtube-bot 서버 — 골든시드 유튜브 시딩 (insta-bot 서버 패턴 재활용)
@@ -41,6 +41,27 @@ const stopMap = new Map<string, boolean>();
 app.post("/api/stop/:jobId", (req, res) => {
   stopMap.set(req.params.jobId, true);
   res.json({ ok: true });
+});
+
+/* ── 채널 영상목록 불러오기 (SSE) ──
+   쿼리: channelUrl, nationality?, headful?
+   진행: {type:'log'} 여러 개 → {type:'channel_done', channelId?, subscribers?, videos[]} */
+app.get("/api/channel/videos", async (req, res) => {
+  const { channelUrl, nationality, headful } = req.query as Record<string, string>;
+  if (!channelUrl) return res.status(400).json({ error: "channelUrl 필요" });
+  sseSetup(res);
+  try {
+    const r = await fetchChannelVideos({
+      channelUrl,
+      nationality: nationality === "foreign" ? "foreign" : "kr",
+      headful: headful === "1",
+      onLog: (msg) => sseSend(res, { type: "log", msg }),
+    });
+    sseSend(res, { type: "channel_done", ...r });
+  } catch (e: any) {
+    sseSend(res, { type: "error", msg: e.message });
+  }
+  res.end();
 });
 
 /* ── 조회 시딩 (SSE) — STEP1 ──
