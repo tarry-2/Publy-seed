@@ -4,6 +4,7 @@ import {
   saveInstaSession, instaSessionExists, crawlByKeyword, sendDMs,
   CrawlTarget, SendResult,
 } from "./instagram";
+import { seedInstaView } from "./seed";
 import {
   getUserPlan, checkMembershipAccess, checkInstaDmQuota, getInstaDmUsage, incrementInstaDmUsage,
   addInstaDmHistory, updateInstaTargetStatus, INSTA_DM_DAILY_LIMIT,
@@ -72,6 +73,33 @@ const stopMap = new Map<string, boolean>();
 app.post("/api/stop/:jobId", (req, res) => {
   stopMap.set(req.params.jobId, true);
   res.json({ ok: true });
+});
+
+/* ── 🌱 인스타 조회 시딩 (SSE) — 무계정, 게이트웨이 referrer + 체류 ──
+   쿼리: postUrl, contentType(post|reels|story), gateway, watchSeconds?, nationality?, headful?, jobId? */
+app.get("/api/seed/view", async (req, res) => {
+  const { postUrl, contentType, gateway, watchSeconds, nationality, headful, jobId } = req.query as Record<string, string>;
+  if (!postUrl) return res.status(400).json({ error: "postUrl 필요" });
+  sseSetup(res);
+  const jid = jobId || Date.now().toString();
+  stopMap.set(jid, false);
+  try {
+    const r = await seedInstaView({
+      postUrl,
+      contentType: contentType === "reels" ? "reels" : contentType === "story" ? "story" : "post",
+      gateway: (gateway as "instagram" | "facebook" | "direct") || "instagram",
+      nationality: nationality === "foreign" ? "foreign" : "kr",
+      headful: headful === "1",
+      watchSeconds: watchSeconds ? parseInt(watchSeconds, 10) : undefined,
+      onLog: (msg) => sseSend(res, { type: "log", msg }),
+      stopSignal: () => stopMap.get(jid) === true,
+    });
+    sseSend(res, { type: "seed_done", ...r });
+  } catch (e: any) {
+    sseSend(res, { type: "error", msg: e.message });
+  }
+  stopMap.delete(jid);
+  res.end();
 });
 
 /* ── 키워드 크롤링 (SSE) ── */

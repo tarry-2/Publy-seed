@@ -14,6 +14,7 @@ import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GsPlan } from "../lib/supabase";
 ─────────────────────────────────────────────────────────── */
 
 const YT_BOT = "http://localhost:3366";
+const INSTA_BOT = "http://localhost:3367";   // 골든시드 인스타 봇(유튜브 3366과 분리 → 동시 실행)
 const F_DISPLAY = "'Sora', ui-sans-serif, system-ui, sans-serif";
 const F_BODY = "'Pretendard', -apple-system, system-ui, sans-serif";
 const F_MONO = "'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace";
@@ -147,6 +148,7 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
 // ═══════════════════════════════════════════════════════════
 function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[]; plan?: string }) {
   const isYt = platform === "youtube";
+  const BOT = isYt ? YT_BOT : INSTA_BOT;   // 플랫폼별 봇(동시 실행 = 포트 분리)
   const accent = isYt ? T.yt : T.gold;
   // 승인된 액션만 노출(allowedActions 없으면=미게이트/관리자 전체 허용)
   const gated = Array.isArray(allowedActions);
@@ -239,14 +241,7 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     pushLog("log", `🧭 게이트웨이: ${gateway === "instagram" ? "인스타 referrer" : gateway === "facebook" ? "페북 referrer" : "직접"} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
-
-    // 🔴 인스타는 봇 미구현(STEP2+, 계정 로그인 필요) → 유튜브 봇으로 보내면 안 됨.
-    if (!isYt) {
-      pushLog("sys", "ℹ️ 인스타 시딩은 준비 중이에요(STEP2). 인스타는 로그인 계정이 있어야 해서, 계정 시스템이 붙은 뒤 열립니다. 지금은 유튜브 조회 시딩만 실행돼요.");
-      picked.forEach((d) => pushLog("log", `⏳ ${d.icon} ${d.label} ×${actions[d.id].qty} — 인스타 계정 연결 후 실행`));
-      setRunning(false);
-      return;
-    }
+    if (!isYt) pushLog("sys", "ℹ️ 인스타는 비로그인 시 로그인 벽이 있어 조회 카운트가 불확실할 수 있어요(진입·체류는 수행). 계정 연결(STEP2) 후 확실해집니다.");
 
     // 조회(view)만 실제 봇 연동(STEP1). 나머지는 계정 붙는대로 순차 연결.
     if (actions["view"]?.on && actions["view"].qty > 0) {
@@ -288,21 +283,22 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
       schedRef.current.timer = setTimeout(() => {
         if (schedRef.current.stop) { setRunning(false); return; }
         setGhElapsed(Math.floor((Date.now() - started) / 1000));
+        // 📊 몇 번째 시작 / 목표 / 완료 / 남음 — 매번 명확히 표시
+        pushLog("sys", `▶️ ${idx + 1}번째 시작 · 목표 ${total} · 완료 ${done} · 남음 ${total - done}`);
         runOneView(jobId + "_" + idx, () => { done += 1; setGhDone(done); runNext(); });
       }, waitMs);
     };
     runNext();
   }
 
-  // 조회 1건 실행(SSE) — 끝나면 onDone 콜백으로 다음 예약
+  // 조회 1건 실행(SSE) — 끝나면 onDone 콜백으로 다음 예약. 플랫폼별 봇/파라미터.
   function runOneView(jobId: string, onDone: () => void) {
-    const q = new URLSearchParams({
-      videoUrl: videoUrl.trim(), videoType: contentType === "longform" ? "longform" : "shorts",
-      gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId,
-    });
+    const q = isYt
+      ? new URLSearchParams({ videoUrl: videoUrl.trim(), videoType: contentType === "longform" ? "longform" : "shorts", gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId })
+      : new URLSearchParams({ postUrl: videoUrl.trim(), contentType, gateway, watchSeconds: String(watchSeconds || 30), nationality, headful: visible ? "1" : "0", jobId });
     jobRef.current = jobId;
     try {
-      const es = new BotEventStream(`${YT_BOT}/api/seed/view?${q}`, { method: "GET" });
+      const es = new BotEventStream(`${BOT}/api/seed/view?${q}`, { method: "GET" });
       esRef.current = es;
       let finished = false;
       const finish = () => { if (finished) return; finished = true; es.close(); esRef.current = null; onDone(); };
@@ -325,7 +321,7 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     schedRef.current.stop = true;
     if (schedRef.current.timer) { clearTimeout(schedRef.current.timer); schedRef.current.timer = null; }
     esRef.current?.close(); esRef.current = null;
-    if (jobRef.current) botFetch(`${YT_BOT}/api/stop/${jobRef.current}`, { method: "POST" }).catch(() => {});
+    if (jobRef.current) botFetch(`${BOT}/api/stop/${jobRef.current}`, { method: "POST" }).catch(() => {});
     setRunning(false);
     pushLog("sys", "⏹ 시딩을 정지했어요.");
   }
@@ -335,11 +331,16 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   };
   const clearLog = () => setLogs([{ t: Date.now(), kind: "sys", msg: "로그를 비웠어요." }]);
 
+  // 📊 목표/완료/남음 — 실행 중이든 아니든 항상 표시(테리 지시). 대기 상태면 켠 조회 물량을 목표로 미리보기.
+  const previewTarget = actions["view"]?.on ? (actions["view"].qty || 0) : 0;
+  const targetNow = running ? ghTarget : previewTarget;
+  const doneNow = running ? ghDone : 0;
+  const remainNow = Math.max(0, targetNow - doneNow);
   const kpis = [
-    { label: "조회 시딩", value: stats.views, unit: "회", tint: T.gold },
-    { label: "성공", value: stats.success, unit: "", tint: "#7dd88a" },
+    { label: "목표", value: targetNow, unit: "회", tint: T.gold },
+    { label: "완료", value: doneNow, unit: "회", tint: "#7dd88a" },
+    { label: "남음", value: remainNow, unit: "회", tint: T.goldDim },
     { label: "실패", value: stats.fail, unit: "", tint: "#ff7a7a" },
-    { label: "골든아워", value: 30, unit: "분", tint: T.goldDim },
   ];
 
   return (
