@@ -4,8 +4,10 @@ import MascotBot from "./MascotBot";
 
 /* ───────────────────────────────────────────────────────────
    골든시드 시딩 콘솔 (SeedingCenter)
-   - 플랫폼(유튜브/인스타)별 콘텐츠 타입 + 국적(한/외) + 액션 다중선택+물량
-     + AI키(댓글 생성) + 게이트웨이 + 트래픽식 로그창(창보기/복사/정지/이어서).
+   - 유튜브 / 인스타는 각각 완전히 독립된 패널(SeedingPanel).
+     URL·콘텐츠타입·국적·게이트웨이·액션·물량·AI키·KPI·로그·실행상태를
+     플랫폼마다 따로 가진다(한쪽에 넣은 게 다른쪽에 안 붙음).
+   - 두 패널은 항상 마운트하고 display로만 토글 → 실행 중 탭 옮겨도 안 꺼짐(트래픽 원칙 A).
    - 라이트/다크 둘 다. 봇: youtube-bot(3366) 조회 시딩 SSE(BotEventStream 토큰).
    ⚠️ 조회(view)만 실동작(STEP1). 좋아요/댓글/공유 등은 UI 완성 + 계정 붙는대로 연결.
 ─────────────────────────────────────────────────────────── */
@@ -74,24 +76,81 @@ function initActions(p: Platform): Record<string, { on: boolean; qty: number }> 
   return o;
 }
 
+// ═══════════════════════════════════════════════════════════
+// 상위 셸 — 헤더 + 플랫폼 탭 + 두 독립 패널(display 토글로 항상 마운트)
+// ═══════════════════════════════════════════════════════════
 export default function SeedingCenter({ showToast, theme = "dark" }: { showToast?: (m: string, t?: any) => void; theme?: "light" | "dark" }) {
   const dark = theme === "dark";
   const T = palette(dark);
-
   const [platform, setPlatform] = useState<Platform>("youtube");
+
+  return (
+    <div style={{ minHeight: "100%", background: T.bg, color: T.ink, fontFamily: F_BODY, padding: "18px 20px 24px" }}>
+      {/* 헤더 */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <MascotBot size={44} />
+        <div>
+          <div style={{ fontFamily: F_DISPLAY, fontWeight: 700, fontSize: 19, letterSpacing: "-.02em" }}>
+            GoldenSeed <span style={{ color: T.gold }}>시딩 콘솔</span>
+          </div>
+          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 1 }}>골든아워 초기시딩 — 임계선 밑에서 자연스럽게</div>
+        </div>
+      </div>
+
+      {/* 플랫폼 탭 — 유튜브/인스타 각각 독립 패널 전환(상태는 서로 안 섞임) */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        {(["youtube", "instagram"] as Platform[]).map((p) => {
+          const on = platform === p, isYt = p === "youtube";
+          return (
+            <button key={p} onClick={() => setPlatform(p)} style={{
+              flex: 1, padding: "11px 14px", borderRadius: 12, cursor: "pointer",
+              border: `1px solid ${on ? (isYt ? T.yt : T.gold) : T.line}`,
+              background: on ? (isYt ? "rgba(255,59,59,.10)" : T.goldGlow) : T.panel,
+              color: on ? T.ink : T.sub, fontWeight: 700, fontFamily: F_DISPLAY, fontSize: 14,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .18s",
+            }}>
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: isYt ? T.yt : T.igGrad }} />
+              {isYt ? "유튜브" : "인스타"}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 두 패널 항상 마운트 → 실행 중 탭 옮겨도 언마운트 안 됨(트래픽 원칙 A) */}
+      <div style={{ display: platform === "youtube" ? "block" : "none" }}>
+        <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} />
+      </div>
+      <div style={{ display: platform === "instagram" ? "block" : "none" }}>
+        <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} />
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════
+// 플랫폼별 독립 패널 — 자기 URL·액션·로그·KPI·실행상태를 전부 따로 가진다
+// ═══════════════════════════════════════════════════════════
+function SeedingPanel({ platform, showToast, T, dark }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean }) {
+  const isYt = platform === "youtube";
+  const accent = isYt ? T.yt : T.gold;
+  const defs = ACTIONS[platform];
+
   const [videoUrl, setVideoUrl] = useState("");
-  const [contentType, setContentType] = useState<string>("shorts");
+  const [contentType, setContentType] = useState<string>(isYt ? "shorts" : CONTENT[platform][0][0]);
   const [nationality, setNationality] = useState<Nationality>("kr");
-  const [gateway, setGateway] = useState<Gateway>("instagram");
+  const [gateway, setGateway] = useState<Gateway>(isYt ? "instagram" : "direct");
   const [watchSeconds, setWatchSeconds] = useState(60);
-  const [actions, setActions] = useState(() => initActions("youtube"));
+  const [actions, setActions] = useState(() => initActions(platform));
   const [aiKey, setAiKey] = useState("");
   const [visible, setVisible] = useState(false);   // 🚪 창 보기 — 봇 브라우저 창 표시(매번 꺼짐, 안전)
   const [running, setRunning] = useState(false);
   const [logs, setLogs] = useState<LogLine[]>([
-    { t: Date.now(), kind: "sys", msg: "골든시드 시딩 콘솔 준비됨. 골든아워(첫 30분)에 시딩하세요." },
+    isYt
+      ? { t: Date.now(), kind: "sys", msg: "골든시드 유튜브 시딩 콘솔 준비됨. 골든아워(첫 30분)에 시딩하세요." }
+      : { t: Date.now(), kind: "sys", msg: "인스타 시딩은 준비 중이에요(STEP2). 계정 로그인 시스템이 붙은 뒤 열립니다." },
   ]);
   const [stats, setStats] = useState({ views: 0, success: 0, fail: 0 });
+  const [logZoom, setLogZoom] = useState(false);   // 🔍 로그 크게 보기(앱 내 모달, 트래픽 계승)
   const esRef = useRef<BotEventStream | null>(null);
   const jobRef = useRef<string>("");
   const logEndRef = useRef<HTMLDivElement | null>(null);
@@ -100,17 +159,8 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
   useEffect(() => () => { esRef.current?.close(); }, []);
 
   const pushLog = (kind: LogLine["kind"], msg: string) => setLogs((l) => [...l.slice(-400), { t: Date.now(), kind, msg }]);
-  const accent = platform === "youtube" ? T.yt : T.gold;
-  const defs = ACTIONS[platform];
   const commentOn = actions["comment"]?.on;
 
-  // 플랫폼 전환 — 콘텐츠 타입·액션 리셋(플랫폼마다 다름)
-  function switchPlatform(p: Platform) {
-    if (running) { showToast?.("시딩 중엔 플랫폼을 바꿀 수 없어요", "info"); return; }
-    setPlatform(p);
-    setContentType(CONTENT[p][0][0]);
-    setActions(initActions(p));
-  }
   const toggleAction = (id: string) => setActions((a) => ({ ...a, [id]: { ...a[id], on: !a[id].on } }));
   const setQty = (id: string, v: number) => setActions((a) => ({ ...a, [id]: { ...a[id], qty: Math.max(0, v) } }));
 
@@ -127,14 +177,14 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
     setRunning(true);
 
     // ── 디테일 로그(1~N) — 트래픽처럼 단계별로 상세하게 ──
-    pushLog("sys", `${resume ? "▶️ 이어서 시딩" : "▶️ 시딩 시작"} — ${platform === "youtube" ? "유튜브" : "인스타"} · ${CONTENT[platform].find((c) => c[0] === contentType)?.[1]}`);
+    pushLog("sys", `${resume ? "▶️ 이어서 시딩" : "▶️ 시딩 시작"} — ${isYt ? "유튜브" : "인스타"} · ${CONTENT[platform].find((c) => c[0] === contentType)?.[1]}`);
     pushLog("log", `🌐 대상 URL: ${videoUrl.trim()}`);
     pushLog("log", `🧭 게이트웨이: ${gateway === "instagram" ? "인스타 referrer" : gateway === "facebook" ? "페북 referrer" : "직접"} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
 
     // 🔴 인스타는 봇 미구현(STEP2+, 계정 로그인 필요) → 유튜브 봇으로 보내면 안 됨.
-    if (platform === "instagram") {
+    if (!isYt) {
       pushLog("sys", "ℹ️ 인스타 시딩은 준비 중이에요(STEP2). 인스타는 로그인 계정이 있어야 해서, 계정 시스템이 붙은 뒤 열립니다. 지금은 유튜브 조회 시딩만 실행돼요.");
       picked.forEach((d) => pushLog("log", `⏳ ${d.icon} ${d.label} ×${actions[d.id].qty} — 인스타 계정 연결 후 실행`));
       setRunning(false);
@@ -191,38 +241,8 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
   ];
 
   return (
-    <div style={{ minHeight: "100%", background: T.bg, color: T.ink, fontFamily: F_BODY, padding: "18px 20px 24px" }}>
-      {/* 헤더 — 마스코트 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <MascotBot size={44} />
-        <div>
-          <div style={{ fontFamily: F_DISPLAY, fontWeight: 700, fontSize: 19, letterSpacing: "-.02em" }}>
-            GoldenSeed <span style={{ color: T.gold }}>시딩 콘솔</span>
-          </div>
-          <div style={{ fontSize: 11.5, color: T.sub, marginTop: 1 }}>골든아워 초기시딩 — 임계선 밑에서 자연스럽게</div>
-        </div>
-      </div>
-
-      {/* 플랫폼 탭 */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-        {(["youtube", "instagram"] as Platform[]).map((p) => {
-          const on = platform === p, isYt = p === "youtube";
-          return (
-            <button key={p} onClick={() => switchPlatform(p)} style={{
-              flex: 1, padding: "11px 14px", borderRadius: 12, cursor: "pointer",
-              border: `1px solid ${on ? (isYt ? T.yt : T.gold) : T.line}`,
-              background: on ? (isYt ? "rgba(255,59,59,.10)" : T.goldGlow) : T.panel,
-              color: on ? T.ink : T.sub, fontWeight: 700, fontFamily: F_DISPLAY, fontSize: 14,
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 8, transition: "all .18s",
-            }}>
-              <span style={{ width: 9, height: 9, borderRadius: 3, background: isYt ? T.yt : T.igGrad }} />
-              {isYt ? "유튜브" : "인스타"}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* KPI */}
+    <div>
+      {/* KPI — 플랫폼별 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 14 }}>
         {kpis.map((k) => (
           <div key={k.label} style={{ background: `linear-gradient(140deg,${T.panel2},${T.panel})`, border: `1px solid ${T.line}`, borderRadius: 14, padding: "12px 13px" }}>
@@ -237,14 +257,14 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
       {/* 실행 패널 */}
       <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
         <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)}
-          placeholder={platform === "youtube" ? "유튜브 영상/쇼츠 URL 붙여넣기" : "인스타 게시물/릴스 URL 붙여넣기"}
+          placeholder={isYt ? "유튜브 영상/쇼츠 URL 붙여넣기" : "인스타 게시물/릴스 URL 붙여넣기"}
           style={{ width: "100%", boxSizing: "border-box", padding: "11px 13px", borderRadius: 11, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink, fontSize: 13.5, fontFamily: F_BODY, outline: "none", marginBottom: 12 }} />
 
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
           <Seg label="콘텐츠" value={contentType} opts={CONTENT[platform]} onPick={setContentType} accent={accent} T={T} />
           <Seg label="국적(계정풀)" value={nationality} opts={[["kr", "🇰🇷 한국인"], ["foreign", "🌍 외국인"]]} onPick={(v) => setNationality(v as Nationality)} accent={accent} T={T} />
           <Seg label="게이트웨이" value={gateway} opts={[["instagram", "인스타"], ["facebook", "페북"], ["direct", "직접"]]} onPick={(v) => setGateway(v as Gateway)} accent={accent} T={T} />
-          {platform === "youtube" && contentType === "longform" && (
+          {isYt && contentType === "longform" && (
             <div>
               <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 5 }}>시청(초)</div>
               <input type="number" value={watchSeconds} min={30} max={600} onChange={(e) => setWatchSeconds(Math.max(30, +e.target.value || 60))}
@@ -293,19 +313,26 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
         )}
       </div>
 
-      {/* 로그창 — 트래픽식 버튼바 + 디테일 로그 */}
+      {/* ▶ 실행 컨트롤 — 로그와 분리된 독립 버튼바(테리 지시: 시작/정지/이어서는 로그 밖에) */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+        {!running
+          ? <RunBtn onClick={() => start(false)} T={T} title="시딩 시작" primary>▶ 시딩 시작</RunBtn>
+          : <RunBtn onClick={stop} T={T} title="정지" danger>■ 정지</RunBtn>}
+        <RunBtn onClick={() => start(true)} T={T} title="이어서 하기(로그 유지)" disabled={running}>↻ 이어서</RunBtn>
+        <RunBtn onClick={() => { setVisible((v) => !v); showToast?.(visible ? "창 보기 끔" : "창 보기 켬 — 다음 실행부터 봇 창 표시", "info"); }} T={T} active={visible} title="실제 봇 브라우저 창 보기">🚪 창 보기</RunBtn>
+      </div>
+
+      {/* 로그창 — 트래픽식 버튼바 + 디테일 로그 (플랫폼별) */}
       <div style={{ background: T.logBg, border: `1px solid ${T.line}`, borderRadius: 14, overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 11px", borderBottom: `1px solid ${T.line}`, background: "rgba(255,255,255,.02)", flexWrap: "wrap" }}>
           <span style={{ width: 8, height: 8, borderRadius: 4, background: running ? "#7dd88a" : T.sub, boxShadow: running ? "0 0 8px #7dd88a" : "none" }} />
-          <span style={{ fontSize: 11.5, color: "#d8cdb4", fontFamily: F_MONO, letterSpacing: ".03em", marginRight: "auto" }}>LIVE LOG</span>
-          {/* 🚪 창 보기 */}
-          <LogBtn onClick={() => { setVisible((v) => !v); showToast?.(visible ? "창 보기 끔" : "창 보기 켬 — 다음 실행부터 봇 창 표시", "info"); }} active={visible} T={T} title="실제 봇 브라우저 창 보기">🚪 창보기</LogBtn>
-          {!running
-            ? <LogBtn onClick={() => start(false)} T={T} title="시딩 시작" accent>▶ 시작</LogBtn>
-            : <LogBtn onClick={stop} T={T} title="정지" danger>■ 정지</LogBtn>}
-          <LogBtn onClick={() => start(true)} T={T} title="이어서 하기(로그 유지)" >↻ 이어서</LogBtn>
+          <span style={{ fontSize: 11.5, color: "#d8cdb4", fontFamily: F_MONO, letterSpacing: ".03em", marginRight: "auto" }}>
+            LIVE LOG · <span style={{ color: isYt ? "#ff6b6b" : T.gold, fontWeight: 800 }}>{isYt ? "유튜브" : "인스타"}</span>
+          </span>
+          {/* 로그 관련 버튼만 — 실행(시작/정지/이어서)은 로그 밖 별도 버튼바로 분리 */}
+          <LogBtn onClick={() => setLogZoom(true)} T={T} title="로그 크게 보기">🔍 크게보기</LogBtn>
           <LogBtn onClick={copyLog} T={T} title="로그 복사">📋 복사</LogBtn>
-          <LogBtn onClick={clearLog} T={T} title="로그 지우기">✕ 닫기</LogBtn>
+          <LogBtn onClick={clearLog} T={T} title="로그 지우기">🧹 비우기</LogBtn>
         </div>
         <div style={{ maxHeight: 190, overflowY: "auto", padding: "10px 13px", fontFamily: F_MONO, fontSize: 12, lineHeight: 1.75 }}>
           {logs.map((l, i) => (
@@ -316,7 +343,46 @@ export default function SeedingCenter({ showToast, theme = "dark" }: { showToast
           <div ref={logEndRef} />
         </div>
       </div>
+
+      {/* 🔍 로그 크게 보기 — 앱 내 모달(별도 창 아님, 트래픽 계승) */}
+      {logZoom && (
+        <div onClick={(e) => { if (e.target === e.currentTarget) setLogZoom(false); }}
+          style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(8,6,3,.8)", display: "flex", alignItems: "center", justifyContent: "center", padding: "min(4vw,30px)" }}>
+          <div style={{ width: "100%", maxWidth: 1000, height: "86vh", background: T.logBg, border: `1px solid ${T.line}`, borderRadius: 16, display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,.55)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, padding: "13px 16px", borderBottom: `1px solid ${T.line}`, flexWrap: "wrap" }}>
+              <b style={{ color: "#e8dcc0", fontSize: 14.5, fontFamily: F_MONO }}>📜 {isYt ? "유튜브" : "인스타"} 실시간 로그 — 크게 보기</b>
+              <div style={{ display: "flex", gap: 8 }}>
+                <LogBtn onClick={copyLog} T={T} title="로그 복사">📋 복사</LogBtn>
+                <LogBtn onClick={() => setLogZoom(false)} T={T} title="닫기" accent>닫기</LogBtn>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 20px", fontFamily: F_MONO, fontSize: 14, lineHeight: 1.9 }}>
+              {logs.map((l, i) => (
+                <div key={i} style={{ color: l.kind === "ok" ? "#7dd88a" : l.kind === "err" ? "#ff7a7a" : l.kind === "sys" ? T.gold : "#d8cdb4" }}>
+                  <span style={{ color: "#6b6350", marginRight: 10 }}>{new Date(l.t).toLocaleTimeString("ko-KR", { hour12: false })}</span>{l.msg}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+// ▶ 실행 컨트롤 버튼 (로그창과 분리된 큰 버튼)
+function RunBtn({ children, onClick, T, title, primary, danger, active, disabled }: any) {
+  const bg = disabled ? T.panel2 : danger ? "rgba(255,59,59,.12)" : primary ? T.gold : active ? T.goldGlow : T.panel;
+  const color = disabled ? T.sub : danger ? T.yt : primary ? "#1a1408" : active ? T.gold : T.ink;
+  const border = danger ? T.yt : primary ? T.gold : active ? T.gold : T.line;
+  return (
+    <button onClick={disabled ? undefined : onClick} title={title} disabled={disabled} style={{
+      flex: primary || danger ? 1 : "0 0 auto", minWidth: primary || danger ? 140 : 0,
+      padding: "12px 20px", borderRadius: 12, border: `1.5px solid ${border}`, background: bg, color,
+      fontSize: 14, fontWeight: 800, cursor: disabled ? "default" : "pointer", fontFamily: F_DISPLAY,
+      display: "flex", alignItems: "center", justifyContent: "center", gap: 7, transition: "all .15s",
+      opacity: disabled ? 0.5 : 1,
+    }}>{children}</button>
   );
 }
 

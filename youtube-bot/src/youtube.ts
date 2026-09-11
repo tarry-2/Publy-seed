@@ -172,11 +172,18 @@ export async function seedView(params: {
     onLog(`[3/8] 🧭 게이트웨이 = ${gwLabel} referrer(${referer || "없음"}) + 인앱 UA — "소셜에서 넘어온 유입"으로 위장`);
     onLog(`[4/8] ▶️ 영상 진입 중… [${videoType === "shorts" ? "쇼츠" : "롱폼"}]`);
     // 게이트웨이 referrer 달고 영상 진입 = "소셜에서 넘어온 유입"으로 인식
-    await page.goto(videoUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: 30000,
-      referer: referer || undefined,
-    });
+    //  ⚠️ 프록시(DataImpulse) 경유 + 유튜브는 무거운 SPA라 domcontentloaded/30s로는 자주 타임아웃.
+    //     waitUntil:"commit"(네비게이션 확정=서버 첫 응답)으로 빠르게 통과 + timeout 넉넉히 + 1회 재시도.
+    //     진입 후 어차피 dismissConsent/ensurePlaying이 필요한 요소를 기다리므로 commit로 충분.
+    const gotoOnce = () => page.goto(videoUrl, { waitUntil: "commit", timeout: 60000, referer: referer || undefined });
+    try {
+      await gotoOnce();
+    } catch (e: any) {
+      onLog(`  ⚠️ 진입 지연(프록시 응답 느림) — 재시도… (${String(e?.message || e).split("\n")[0]})`);
+      await gotoOnce();   // 재시도도 실패하면 바깥 catch에서 fail 처리
+    }
+    // 첫 응답 후 DOM 안정화 잠깐 대기(실패해도 진행 — 이후 요소 대기가 받쳐줌)
+    await page.waitForLoadState("domcontentloaded", { timeout: 20000 }).catch(() => {});
     onLog(`[5/8] 📄 페이지 로드됨 — 동의/광고 팝업 정리 중…`);
     await page.waitForTimeout(humanDelayMs(1.5, 3));
     await dismissConsent(page);
