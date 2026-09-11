@@ -49,6 +49,10 @@ const LAUNCH_ARGS = [
   "--no-first-run",
   "--no-default-browser-check",
   "--autoplay-policy=no-user-gesture-required", // 자동재생 허용(조회 카운트 확보)
+  // 🔴🔴 프록시로 유튜브 진입 시 page.goto 타임아웃의 진짜 원인 = HTTP/2 (실측 확정).
+  //   DataImpulse CONNECT 터널에서 Chromium이 HTTP/2로 구글/유튜브에 붙으면 응답이 안 와 hang.
+  //   HTTP/1.1로 강제하면 프록시로도 1~2초에 진입 성공(curl이 됐던 이유도 HTTP/1.1). QUIC/스킴/세미콜론 다 무관이었음.
+  "--disable-http2",
 ];
 
 const ANTI_DETECTION_SCRIPT = `
