@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { BotEventStream, botFetch } from "../lib/botApi";
 import MascotBot from "./MascotBot";
+import MonetizeCoach from "./MonetizeCoach";
 import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GsPlan } from "../lib/supabase";
 
 /* ───────────────────────────────────────────────────────────
@@ -560,6 +561,11 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
             </>
           )}
         </div>
+      )}
+
+      {/* 💰 수익화(YPP) 진단 — 채널 불러온 뒤(유튜브) */}
+      {isYt && channelVideos.length > 0 && (
+        <MonetizeCoach videos={channelVideos} subscribers={channelSubs} T={T} perVideoViews={actions["view"]?.qty || 300} />
       )}
 
       {/* 실행 패널 */}
