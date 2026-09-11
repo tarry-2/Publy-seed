@@ -54,13 +54,20 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   const [lics, setLics] = useState<ToolLicense[]>([]);
   const [licLoaded, setLicLoaded] = useState(false);
   const [homeView, setHomeView] = useState(true);  // true=주문화면, false=시딩 콘솔
+  const homeInitRef = useRef(false);               // 최초 로드 1회만 홈/대시보드 판단(트래픽 계승)
   useEffect(() => {
     let alive = true;
     const load = async () => {
       const l = await getTrafficLicenses(user.email);
       if (!alive) return;
       setLics(l); setLicLoaded(true);
-      // 승인이 하나라도 있으면 처음부터 콘솔을 볼 수 있게(단, 첫 로드시 승인 없으면 주문화면 유지)
+      // ★트래픽 계승: 최초 로드 1회만 판단 — 승인 있으면(만료 전) 대시보드 직행, 승인 0이면 주문화면 유지.
+      //   이후엔 사용자가 상단 버튼으로 자유 전환(자동 강제전환 안 함).
+      if (!homeInitRef.current) {
+        homeInitRef.current = true;
+        const active = l.filter(x => x.expire_at === null || (x.remain_sec ?? 0) > 0);
+        if (active.length > 0) setHomeView(false);   // 기존 승인회원=바로 대시보드
+      }
     };
     void load();
     const iv = window.setInterval(load, 2000);   // ★2초 실시간 — 관리자가 승인/등급수정/기능변경하면 2초 내 반영(트래픽 동일)
@@ -118,6 +125,12 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
         </span>
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center", flexShrink: 0, ["WebkitAppRegion" as any]: "no-drag" }}>
           {!isMobile && <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>{user.name || user.email}</span>}
+          {/* 🔀 주문↔대시보드 토글 — 승인된 게 있을 때만(트래픽 계승) */}
+          {approvedTools.length > 0 && (
+            <button onClick={() => setHomeView(h => !h)} title={homeView ? "시딩 콘솔로" : "주문 화면으로"} style={{ ...btn(homeView ? T.gold : T.panel, homeView ? "#231a08" : T.gold), padding: isMobile ? "6px 10px" : "7px 13px", border: `1px solid ${T.gold}` }}>
+              {homeView ? (isMobile ? "📊" : "📊 대시보드") : (isMobile ? "🏠" : "🏠 주문")}
+            </button>
+          )}
           <button onClick={onThemeToggle} title="라이트/다크" style={{ ...btn(T.panel, T.ink), padding: "6px 9px" }}>{dark ? "☀️" : "🌙"}</button>
           <button onClick={onLogout} style={{ ...btn(T.panel, T.sub), padding: isMobile ? "6px 9px" : "7px 14px" }}>{isMobile ? "↩" : "로그아웃"}</button>
         </div>
@@ -137,9 +150,8 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
           />
         ) : (
           <>
-            {/* 콘솔 상단: 주문화면으로 돌아가기 */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 20px 0" }}>
-              <button onClick={() => setHomeView(true)} style={{ ...btn(T.panel, T.sub), padding: "6px 12px" }}>← 주문/신청 화면</button>
+            {/* 콘솔 상단 라벨(주문↔대시보드 전환은 헤더 버튼으로) */}
+            <div style={{ padding: "10px 20px 0" }}>
               <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>승인된 시딩: {approvedTools.map(t => t === "youtube" ? "유튜브" : "인스타").join(" · ")}</span>
             </div>
             <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} planByTool={planByTool} />
