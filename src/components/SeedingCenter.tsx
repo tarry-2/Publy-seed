@@ -4,7 +4,7 @@ import MascotBot from "./MascotBot";
 import MonetizeCoach from "./MonetizeCoach";
 import YtApiKeyBox from "./YtApiKeyBox";
 import { ytChannelStats, ytVideoViews } from "../lib/youtubeApi";
-import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GS_MEMBER_PLANS, GsPlan } from "../lib/supabase";
+import { GS_PLAN_LIMITS, GS_PLAN_LABEL, GS_MEMBER_PLANS, GsPlan, getSeedDailyUsage, incrementSeedQuota } from "../lib/supabase";
 
 /* ───────────────────────────────────────────────────────────
    골든시드 시딩 콘솔 (SeedingCenter)
@@ -102,9 +102,10 @@ function initActions(p: Platform): Record<string, { on: boolean; qty: number }> 
 // ═══════════════════════════════════════════════════════════
 // 상위 셸 — 헤더 + 플랫폼 탭 + 두 독립 패널(display 토글로 항상 마운트)
 // ═══════════════════════════════════════════════════════════
-export default function SeedingCenter({ showToast, theme = "dark", approvedTools, allowedByTool, planByTool, remainByTool, expireByTool, licFetchedAt }: {
+export default function SeedingCenter({ showToast, theme = "dark", userId, approvedTools, allowedByTool, planByTool, remainByTool, expireByTool, licFetchedAt }: {
   showToast?: (m: string, t?: any) => void;
   theme?: "light" | "dark";
+  userId?: string;                      // 회원 id — 오늘 사용량 카운트(무제한도 카운트)
   approvedTools?: string[];             // 승인된 플랫폼(없으면 전체 허용 = 관리자/미게이트 모드)
   allowedByTool?: Record<string, string[]>;  // 플랫폼별 승인된 액션 id 배열
   planByTool?: Record<string, string>;       // 플랫폼별 승인 등급(물량 상한용)
@@ -155,12 +156,12 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
       {/* 승인된 패널만 항상 마운트 → 실행 중 탭 옮겨도 언마운트 안 됨(트래픽 원칙 A) */}
       {platforms.includes("youtube") && (
         <div style={{ display: platform === "youtube" ? "block" : "none" }}>
-          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.youtube} plan={planByTool?.youtube} remainSec={remainByTool?.youtube} expireAt={expireByTool?.youtube} licFetchedAt={licFetchedAt} />
+          <SeedingPanel platform="youtube" showToast={showToast} T={T} dark={dark} userId={userId} allowedActions={allowedByTool?.youtube} plan={planByTool?.youtube} remainSec={remainByTool?.youtube} expireAt={expireByTool?.youtube} licFetchedAt={licFetchedAt} />
         </div>
       )}
       {platforms.includes("instagram") && (
         <div style={{ display: platform === "instagram" ? "block" : "none" }}>
-          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} allowedActions={allowedByTool?.instagram} plan={planByTool?.instagram} remainSec={remainByTool?.instagram} expireAt={expireByTool?.instagram} licFetchedAt={licFetchedAt} />
+          <SeedingPanel platform="instagram" showToast={showToast} T={T} dark={dark} userId={userId} allowedActions={allowedByTool?.instagram} plan={planByTool?.instagram} remainSec={remainByTool?.instagram} expireAt={expireByTool?.instagram} licFetchedAt={licFetchedAt} />
         </div>
       )}
     </div>
@@ -170,7 +171,7 @@ export default function SeedingCenter({ showToast, theme = "dark", approvedTools
 // ═══════════════════════════════════════════════════════════
 // 플랫폼별 독립 패널 — 자기 URL·액션·로그·KPI·실행상태를 전부 따로 가진다
 // ═══════════════════════════════════════════════════════════
-function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, remainSec, expireAt, licFetchedAt }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; allowedActions?: string[]; plan?: string; remainSec?: number; expireAt?: string | null; licFetchedAt?: number }) {
+function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, plan, remainSec, expireAt, licFetchedAt }: { platform: Platform; showToast?: (m: string, t?: any) => void; T: any; dark: boolean; userId?: string; allowedActions?: string[]; plan?: string; remainSec?: number; expireAt?: string | null; licFetchedAt?: number }) {
   const isYt = platform === "youtube";
   const BOT = isYt ? YT_BOT : INSTA_BOT;   // 플랫폼별 봇(동시 실행 = 포트 분리)
   const accent = isYt ? T.yt : T.gold;
@@ -260,6 +261,18 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, rema
   const [showPlanTable, setShowPlanTable] = useState(false);   // 📋 등급별 사용표 펼침
   const [licNow, setLicNow] = useState(Date.now());            // 🎫 만기 카운트다운용 실시간 tick
   useEffect(() => { const iv = window.setInterval(() => setLicNow(Date.now()), 1000); return () => window.clearInterval(iv); }, []);
+  // 📊 오늘 조회 시딩 사용량(플랫폼별, 무제한도 카운트) — 마운트 시 로드 + 10초마다 갱신(다른 기기/자정 반영)
+  const [usedToday, setUsedToday] = useState(0);
+  const usedTodayRef = useRef(0);   // 실행 중(closure) 최신 사용량 — 한도 도달 시 자동 중단용
+  const bumpUsed = (n: number) => { usedTodayRef.current = n; setUsedToday(n); };
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    const load = () => { getSeedDailyUsage(userId, platform).then(n => { if (alive) bumpUsed(n); }).catch(() => {}); };
+    load();
+    const iv = window.setInterval(load, 10000);
+    return () => { alive = false; window.clearInterval(iv); };
+  }, [userId, platform]);
   // ⏱️ 골든아워 스케줄러 상태
   const [ghTarget, setGhTarget] = useState(0);      // 현재 영상 목표 조회 물량
   const [ghDone, setGhDone] = useState(0);          // 현재 영상 실행된 조회 수
@@ -337,10 +350,19 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, rema
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
     if (!isYt) pushLog("sys", "ℹ️ 인스타는 비로그인 시 로그인 벽이 있어 조회 카운트가 불확실할 수 있어요(진입·체류는 수행). 계정 연결(STEP2) 후 확실해집니다.");
 
+    // 🛑 오늘 조회 한도 소진 체크(무제한=viewLimit 0은 통과, 사용량은 계속 기록)
+    if (viewLimit > 0 && remainQuota <= 0 && actions["view"]?.on) {
+      pushLog("err", `🛑 오늘 조회 시딩 한도(${viewLimit.toLocaleString()}회)를 다 썼어요 — 자정에 초기화되거나 등급을 올리면 이어서 할 수 있어요.`);
+      showToast?.(`오늘 조회 한도 소진 (${gradeLabel} ${viewLimit.toLocaleString()}회)`, "error");
+      setRunning(false);
+      return;
+    }
+
     // 조회(view)만 실제 봇 연동(STEP1). 나머지는 계정 붙는대로 순차 연결.
     if (actions["view"]?.on && actions["view"].qty > 0) {
       const total = actions["view"].qty;
       pushLog("sys", `⏱️ 골든아워 스케줄러 시작 — 영상당 조회 ${total}회를 30분 자연 성장곡선(초반 집중→테이퍼링)으로 시딩${chosen.length > 1 ? ` · 총 ${chosen.length}개 순차` : ""}`);
+      if (viewLimit > 0) pushLog("log", `📊 오늘 사용 ${usedToday.toLocaleString()}/${viewLimit.toLocaleString()}회 · 남음 ${remainQuota.toLocaleString()}회 (한도 도달 시 자동 안내)`);
       runQueue(chosen, total, jobId);
     } else {
       pushLog("sys", "ℹ️ 조회 외 액션은 계정 워밍업(STEP2+) 후 연결됩니다 — 물량 설정은 저장돼요.");
@@ -384,6 +406,11 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, rema
     let done = 0;
     const runNext = () => {
       if (schedRef.current.stop) { setRunning(false); return; }
+      // 🛑 오늘 조회 한도 도달 시 자동 중단(무제한=viewLimit 0은 통과). 실행 중에도 초과 방지.
+      if (viewLimit > 0 && usedTodayRef.current >= viewLimit) {
+        pushLog("err", `🛑 오늘 조회 한도(${viewLimit.toLocaleString()}회) 도달 — 시딩을 멈춰요. 자정 초기화 또는 등급 상향 후 이어서 하세요.`);
+        schedRef.current.stop = true; setRunning(false); return;
+      }
       if (done >= total) {
         pushLog("ok", `${queueTotal > 1 ? "  " : ""}✅ 이 영상 골든아워 완료 — 조회 ${done}회`);
         onVideoDone(); return;
@@ -425,6 +452,9 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, rema
             if (d.status === "success") {
               if (video.type === "shorts") bumpSeeded({ shortsViews: 1 });
               else bumpSeeded({ watchSeconds: d.watchedSeconds || 0 });
+              // 📊 오늘 사용량 +1(무제한도 카운트) — 서버 영속 + 화면 즉시 반영
+              bumpUsed(usedTodayRef.current + 1);
+              if (userId) incrementSeedQuota(userId, platform, 1).then((n) => bumpUsed(n)).catch(() => {});
             }
             finish();
           } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); finish(); }
@@ -539,6 +569,9 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, rema
   const expStr = expDate ? `${expDate.getFullYear()}.${String(expDate.getMonth() + 1).padStart(2, "0")}.${String(expDate.getDate()).padStart(2, "0")}` : "";
   const gradeLabel = isUnlimited ? "무제한" : (GS_PLAN_LABEL[gsPlan] || gsPlan);
   const platLabel = isYt ? "유튜브" : "인스타";
+  // 📊 오늘 조회 시딩 사용량 / 한도(무제한=0) / 남음. 무제한도 사용 숫자는 카운트해서 보여준다(테리).
+  const viewLimit = GS_PLAN_LIMITS[platform]?.view?.[gsPlan] ?? 0;   // 0 = 무제한
+  const remainQuota = viewLimit > 0 ? Math.max(0, viewLimit - usedToday) : 0;
 
   // 📊 목표/완료/남음 — 실행 중이든 아니든 항상 표시(테리 지시). 대기 상태면 켠 조회 물량을 목표로 미리보기.
   const previewTarget = actions["view"]?.on ? (actions["view"].qty || 0) : 0;
@@ -571,6 +604,24 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan, rema
             </span>
           )}
           <button onClick={() => setShowPlanTable(v => !v)} style={{ marginLeft: "auto", padding: "5px 11px", borderRadius: 8, border: `1px solid ${showPlanTable ? T.gold : T.line}`, background: showPlanTable ? T.goldGlow : T.panel2, color: showPlanTable ? T.gold : T.ink, fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>📋 등급별 사용표</button>
+        </div>
+        {/* 📊 오늘 조회 시딩 사용량 / 남은 한도 (무제한도 사용 숫자 카운트) */}
+        <div style={{ marginTop: 9 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
+            <span style={{ fontSize: 11, color: T.sub, fontWeight: 700 }}>📊 오늘 조회 시딩</span>
+            <span style={{ fontSize: 12.5, fontWeight: 800, color: T.ink, fontFamily: F_MONO }}>
+              {usedToday.toLocaleString()}{viewLimit > 0 ? <span style={{ color: T.sub, fontWeight: 600 }}> / {viewLimit.toLocaleString()}회</span> : <span style={{ color: T.sub, fontWeight: 600 }}>회</span>}
+            </span>
+            {viewLimit > 0
+              ? <span style={{ fontSize: 11, fontWeight: 800, color: remainQuota <= 0 ? "#ff7a7a" : "#7dd88a" }}>{remainQuota <= 0 ? "오늘 한도 소진" : `남음 ${remainQuota.toLocaleString()}회`}</span>
+              : <span style={{ fontSize: 11, fontWeight: 800, color: T.gold }}>무제한 (사용량만 기록)</span>}
+            <span style={{ fontSize: 9.5, color: T.sub, marginLeft: "auto" }}>매일 자정 초기화</span>
+          </div>
+          {viewLimit > 0 && (
+            <div style={{ height: 6, borderRadius: 99, background: T.line, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${Math.min(100, Math.round((usedToday / viewLimit) * 100))}%`, borderRadius: 99, background: remainQuota <= 0 ? "#ff7a7a" : `linear-gradient(90deg,${T.gold},${T.goldDim})`, transition: "width .4s" }} />
+            </div>
+          )}
         </div>
         {/* 📋 등급별 사용표 — 무제한(관리자) 제외, free 없음(베이직/프로/프리미엄) */}
         {showPlanTable && (

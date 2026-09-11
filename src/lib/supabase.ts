@@ -780,6 +780,25 @@ export async function resetInflowQuota(userId: string): Promise<void> {
   await supabase.from("publy_settings").upsert({ key: inflowQuotaKey(userId), value: "0" }, { onConflict: "key" });
 }
 
+/* ══ 🌱 골든시드 시딩 하루 사용량 — publy_settings key 재사용(DB 스키마 변경 불필요, 트래픽 inflow 방식 계승) ══
+   플랫폼(youtube/instagram)별 조회(view) 시딩 카운트. 자정(KST) 자동 초기화(날짜 키).
+   ★무제한(관리자)도 카운트한다(테리: 무제한도 오늘 사용 숫자는 보여야 함) — 표시용, 차단만 안 함. */
+function seedQuotaKey(userId: string, platform: string): string { return `gs_seed_view_${userId}_${platform}_${koreaDateKey()}`; }
+export async function getSeedDailyUsage(userId: string, platform: string): Promise<number> {
+  if (!userId) return 0;
+  try {
+    const { data } = await supabase.from("publy_settings").select("value").eq("key", seedQuotaKey(userId, platform)).maybeSingle();
+    return data?.value ? (parseInt(data.value, 10) || 0) : 0;
+  } catch { return 0; }
+}
+export async function incrementSeedQuota(userId: string, platform: string, by = 1): Promise<number> {
+  if (!userId) return 0;
+  const used = await getSeedDailyUsage(userId, platform);
+  const next = used + by;
+  try { await supabase.from("publy_settings").upsert({ key: seedQuotaKey(userId, platform), value: String(next) }, { onConflict: "key" }); } catch {}
+  return next;
+}
+
 /* ══ 🎯 순위 오토파일럿 — 목표 순위 정하면 유입을 자동 조절(낮으면↑ 달성하면↓). publy_autopilot 테이블. ══ */
 export type AutopilotConfig = {
   user_id: string;

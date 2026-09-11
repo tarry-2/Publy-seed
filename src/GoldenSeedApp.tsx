@@ -160,7 +160,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
             <div style={{ padding: "10px 20px 0" }}>
               <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>승인된 시딩: {approvedTools.map(t => t === "youtube" ? "유튜브" : "인스타").join(" · ")}</span>
             </div>
-            <SeedingCenter showToast={showToast} theme={theme} approvedTools={approvedTools} allowedByTool={allowedByTool} planByTool={planByTool} remainByTool={remainByTool} expireByTool={expireByTool} licFetchedAt={licFetchedAt} />
+            <SeedingCenter showToast={showToast} theme={theme} userId={user.id} approvedTools={approvedTools} allowedByTool={allowedByTool} planByTool={planByTool} remainByTool={remainByTool} expireByTool={expireByTool} licFetchedAt={licFetchedAt} />
           </>
         )}
       </div>
