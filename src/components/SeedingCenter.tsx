@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from "react";
 import { BotEventStream, botFetch } from "../lib/botApi";
 import MascotBot from "./MascotBot";
 import MonetizeCoach from "./MonetizeCoach";
@@ -199,13 +199,30 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   const removeSavedUrl = (u: string) => persistUrls(savedUrls.filter(x => x !== u));
   const [contentType, setContentType] = useState<string>(isYt ? "shorts" : CONTENT[platform][0][0]);
   // 📺 채널 불러오기(유튜브) — 채널 주소 → 영상목록(쇼츠/롱폼 분류) → 골라서 전체 시딩
-  const [channelUrl, setChannelUrl] = useState("");
+  //  ★ 크래시/재시작에도 안 날아가게 localStorage 영속(트래픽 원칙 B). 불러온 "그 시점 스냅샷".
+  const CHAN_KEY = `gs_channel_${platform}`;
+  const [channelUrl, setChannelUrl] = useState(() => { try { return localStorage.getItem(`${CHAN_KEY}_url`) || ""; } catch { return ""; } });
   const [channelLoading, setChannelLoading] = useState(false);
-  const [channelVideos, setChannelVideos] = useState<ChannelVideo[]>([]);
-  const [channelSubs, setChannelSubs] = useState<number | undefined>(undefined);
+  const [channelVideos, setChannelVideos] = useState<ChannelVideo[]>(() => { try { return JSON.parse(localStorage.getItem(`${CHAN_KEY}_vids`) || "[]"); } catch { return []; } });
+  const [channelSubs, setChannelSubs] = useState<number | undefined>(() => { try { const s = localStorage.getItem(`${CHAN_KEY}_subs`); return s ? Number(s) : undefined; } catch { return undefined; } });
+  const [channelLoadedAt, setChannelLoadedAt] = useState<number | undefined>(() => { try { const s = localStorage.getItem(`${CHAN_KEY}_at`); return s ? Number(s) : undefined; } catch { return undefined; } });
   const [sortOrder, setSortOrder] = useState<"recent" | "old">("recent");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const chanEsRef = useRef<BotEventStream | null>(null);
+  // 입력한 채널 주소는 즉시 영속(다시 안 쳐도 됨)
+  useEffect(() => { try { localStorage.setItem(`${CHAN_KEY}_url`, channelUrl); } catch {} }, [channelUrl, CHAN_KEY]);
+  // 💾 저장한 내 계정(채널) 목록 — 삭제 전엔 안 사라짐(유튜브·인스타 공용, 플랫폼별)
+  const CHAN_SAVED = `gs_saved_channels_${platform}`;
+  const [savedChannels, setSavedChannels] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(CHAN_SAVED) || "[]"); } catch { return []; } });
+  const persistChannels = (list: string[]) => { setSavedChannels(list); try { localStorage.setItem(CHAN_SAVED, JSON.stringify(list)); } catch {} };
+  const saveChannel = () => {
+    const u = channelUrl.trim();
+    if (!u) { showToast?.("채널(계정) 주소를 입력하세요", "error"); return; }
+    if (savedChannels.includes(u)) { showToast?.("이미 저장된 계정이에요", "info"); return; }
+    persistChannels([u, ...savedChannels].slice(0, 30));
+    showToast?.("계정을 저장했어요 (삭제 전엔 유지돼요)", "success");
+  };
+  const removeChannel = (u: string) => persistChannels(savedChannels.filter((x) => x !== u));
   const [nationality, setNationality] = useState<Nationality>("kr");
   const [gateway, setGateway] = useState<Gateway>(isYt ? "instagram" : "direct");
   const [watchSeconds, setWatchSeconds] = useState(60);
@@ -390,10 +407,14 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   }
 
   // 📺 채널 주소 → 영상목록 불러오기(SSE). 완료 시 골든아워 영상 자동 선택.
-  function loadChannel() {
-    const u = channelUrl.trim();
-    if (!u) { showToast?.("채널 주소를 입력하세요", "error"); return; }
+  function loadChannel(target?: string) {
+    const u = (target ?? channelUrl).trim();
+    if (!u) { showToast?.("채널(계정) 주소를 입력하세요", "error"); return; }
+    if (!isYt) { showToast?.("인스타 계정 불러오기는 준비 중이에요(STEP2)", "info"); return; }
     if (channelLoading) return;
+    if (target && target !== channelUrl) setChannelUrl(target);
+    // 불러온 계정은 자동 저장(사용자가 삭제 전엔 안 사라짐)
+    if (!savedChannels.includes(u)) persistChannels([u, ...savedChannels].slice(0, 30));
     setChannelLoading(true);
     setChannelVideos([]); setSelectedIds(new Set()); setChannelSubs(undefined);
     pushLog("sys", `📺 채널 불러오기 시작 — ${u} (RSS+스크래핑 혼합, 오래 걸릴 수 있어요)`);
@@ -410,6 +431,13 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
           const vids: ChannelVideo[] = d.videos || [];
           setChannelVideos(vids);
           setChannelSubs(d.subscribers);
+          const at = Date.now(); setChannelLoadedAt(at);
+          // 결과 스냅샷 영속 — 크래시/재시작해도 리스트·수익화 진단 유지
+          try {
+            localStorage.setItem(`${CHAN_KEY}_vids`, JSON.stringify(vids));
+            localStorage.setItem(`${CHAN_KEY}_subs`, String(d.subscribers ?? ""));
+            localStorage.setItem(`${CHAN_KEY}_at`, String(at));
+          } catch {}
           const golden = vids.filter(isGolden).map((v) => v.videoId);
           setSelectedIds(new Set(golden));   // 골든아워(30분 이내) 자동 선택
           const nShorts = vids.filter((v) => v.type === "shorts").length;
@@ -420,8 +448,8 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     };
     es.onerror = (detail: any) => { pushLog("err", `⚠️ 채널 불러오기 실패 — ${detail || "youtube-bot(3366) 실행 확인"}`); finish(); };
   }
-  // 선택 헬퍼
-  const toggleSel = (id: string) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // 선택 헬퍼 (toggleSel은 useCallback — VideoSection memo 유지 위해 참조 고정)
+  const toggleSel = useCallback((id: string) => setSelectedIds((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; }), []);
   const selectAll = () => setSelectedIds(new Set(channelVideos.map((v) => v.videoId)));
   const selectNone = () => setSelectedIds(new Set());
   const selectType = (t: "shorts" | "longform") => setSelectedIds(new Set(channelVideos.filter((v) => v.type === t).map((v) => v.videoId)));
@@ -442,13 +470,14 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   const clearLog = () => setLogs([{ t: Date.now(), kind: "sys", msg: "로그를 비웠어요." }]);
 
   // 📺 채널 영상 정렬/분리(최근순·오래된순 + 🔥골든아워/쇼츠/롱폼 섹션)
-  const sortedVideos = [...channelVideos].sort((a, b) => {
+  //  ★ useMemo — 실행 중 매초 리렌더에도 수백 개 재정렬 안 하게(크래시 방지 핵심)
+  const sortedVideos = useMemo(() => [...channelVideos].sort((a, b) => {
     const ta = a.publishedAt ?? -1, tb = b.publishedAt ?? -1;
     return sortOrder === "recent" ? tb - ta : ta - tb;
-  });
-  const goldenList = sortedVideos.filter(isGolden);
-  const shortsList = sortedVideos.filter((v) => v.type === "shorts" && !isGolden(v));
-  const longList = sortedVideos.filter((v) => v.type === "longform" && !isGolden(v));
+  }), [channelVideos, sortOrder]);
+  const goldenList = useMemo(() => sortedVideos.filter(isGolden), [sortedVideos]);
+  const shortsList = useMemo(() => sortedVideos.filter((v) => v.type === "shorts" && !isGolden(v)), [sortedVideos]);
+  const longList = useMemo(() => sortedVideos.filter((v) => v.type === "longform" && !isGolden(v)), [sortedVideos]);
   const selCount = selectedIds.size;
 
   // 📊 목표/완료/남음 — 실행 중이든 아니든 항상 표시(테리 지시). 대기 상태면 켠 조회 물량을 목표로 미리보기.
@@ -515,13 +544,31 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
           </div>
           <div style={{ display: "flex", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
             <input value={channelUrl} onChange={(e) => setChannelUrl(e.target.value)}
-              placeholder="유튜브 채널 주소 (예: youtube.com/@핸들)"
-              style={{ flex: 1, minWidth: 180, boxSizing: "border-box", padding: "11px 13px", borderRadius: 11, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink, fontSize: 13.5, fontFamily: F_BODY, outline: "none" }} />
-            <button onClick={loadChannel} disabled={channelLoading}
+              placeholder={isYt ? "유튜브 채널 주소 (예: youtube.com/@핸들)" : "인스타 계정 주소 (준비 중)"}
+              style={{ flex: 1, minWidth: 160, boxSizing: "border-box", padding: "11px 13px", borderRadius: 11, border: `1px solid ${T.line}`, background: T.panel2, color: T.ink, fontSize: 13.5, fontFamily: F_BODY, outline: "none" }} />
+            <button onClick={saveChannel} title="이 계정 저장(삭제 전엔 유지)"
+              style={{ flexShrink: 0, padding: "0 14px", borderRadius: 11, border: `1px solid ${T.gold}`, background: T.goldGlow, color: T.gold, fontSize: 13, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>💾 계정저장</button>
+            <button onClick={() => loadChannel()} disabled={channelLoading}
               style={{ flexShrink: 0, padding: "0 16px", borderRadius: 11, border: `1px solid ${T.gold}`, background: channelLoading ? T.panel2 : T.gold, color: channelLoading ? T.sub : "#1a1408", fontSize: 13, fontWeight: 800, cursor: channelLoading ? "default" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
               {channelLoading ? "⏳ 불러오는 중…" : "📥 영상 불러오기"}
             </button>
           </div>
+
+          {/* 💾 저장된 내 계정 — 클릭하면 불러와요(사용자가 삭제 전엔 안 사라짐) */}
+          {savedChannels.length > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 6, fontWeight: 700 }}>💾 저장된 내 계정 (클릭=불러오기 · 삭제 전엔 유지)</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {savedChannels.map((c) => (
+                  <div key={c} style={{ display: "flex", alignItems: "center", gap: 6, background: channelUrl === c ? T.goldGlow : T.panel2, border: `1px solid ${channelUrl === c ? T.gold : T.line}`, borderRadius: 9, padding: "7px 9px" }}>
+                    <span onClick={() => loadChannel(c)} title={c} style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.ink, cursor: "pointer", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: F_MONO }}>{c}</span>
+                    <button onClick={() => loadChannel(c)} disabled={channelLoading} style={{ flexShrink: 0, padding: "3px 10px", borderRadius: 7, border: "none", background: T.gold, color: "#1a1408", fontSize: 11, fontWeight: 800, cursor: channelLoading ? "default" : "pointer", fontFamily: "inherit" }}>불러오기</button>
+                    <button onClick={() => removeChannel(c)} title="계정 삭제" style={{ flexShrink: 0, padding: "3px 8px", borderRadius: 7, border: `1px solid ${T.line}`, background: "transparent", color: T.sub, fontSize: 11, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {channelVideos.length > 0 && (
             <>
@@ -529,6 +576,9 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                 {channelSubs != null && <span style={{ fontSize: 11, color: T.sub }}>👥 구독자 <b style={{ color: T.ink }}>{channelSubs.toLocaleString()}</b></span>}
                 <span style={{ fontSize: 11, color: T.sub }}>총 <b style={{ color: T.ink }}>{channelVideos.length}</b>개</span>
+                {channelLoadedAt && <span style={{ fontSize: 10, color: T.sub }} title="실시간이 아니라, 불러온 그 시점의 스냅샷이에요">📸 {Math.max(0, Math.floor((Date.now() - channelLoadedAt) / 60000))}분 전 측정(스냅샷)</span>}
+                <button onClick={() => loadChannel()} disabled={channelLoading} title="지금 다시 측정(스냅샷 갱신)"
+                  style={{ padding: "4px 10px", borderRadius: 8, border: `1px solid ${T.gold}`, background: T.goldGlow, color: T.gold, fontSize: 10.5, fontWeight: 800, cursor: channelLoading ? "default" : "pointer", fontFamily: "inherit" }}>🔄 새로고침</button>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 4, background: T.panel2, borderRadius: 9, padding: 3, border: `1px solid ${T.line}` }}>
                   {([["recent", "최근순"], ["old", "오래된순"]] as [("recent" | "old"), string][]).map(([v, lbl]) => (
                     <button key={v} onClick={() => setSortOrder(v)} style={{ padding: "5px 11px", borderRadius: 7, border: "none", cursor: "pointer", background: sortOrder === v ? T.gold : "transparent", color: sortOrder === v ? "#1a1408" : T.sub, fontWeight: 700, fontSize: 11.5 }}>{lbl}</button>
@@ -747,7 +797,8 @@ function SelBtn({ children, onClick, T, accent }: any) {
 }
 
 // 영상 섹션(🔥골든아워/쇼츠/롱폼) — 체크박스 리스트
-function VideoSection({ title, color, list, selectedIds, onToggle, T, golden }: {
+// ★ memo — 실행 중(매초 리렌더) 리스트가 다시 안 그려지게(수백 썸네일 재렌더=크래시 원인 차단)
+const VideoSection = memo(function VideoSection({ title, color, list, selectedIds, onToggle, T, golden }: {
   title: string; color: string; list: ChannelVideo[]; selectedIds: Set<string>; onToggle: (id: string) => void; T: any; golden?: boolean;
 }) {
   return (
@@ -766,7 +817,7 @@ function VideoSection({ title, color, list, selectedIds, onToggle, T, golden }: 
                 background: on ? T.gold : "transparent", color: "#1a1408", fontSize: 11, fontWeight: 900,
                 display: "grid", placeItems: "center",
               }}>{on ? "✓" : ""}</span>
-              <img src={v.thumb} alt="" style={{ width: 64, height: 36, flexShrink: 0, objectFit: "cover", borderRadius: 6, background: T.line }} />
+              <img src={v.thumb} alt="" loading="lazy" decoding="async" style={{ width: 64, height: 36, flexShrink: 0, objectFit: "cover", borderRadius: 6, background: T.line }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, color: T.ink, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.title}</div>
                 <div style={{ fontSize: 10, color: T.sub, marginTop: 2, display: "flex", gap: 7, flexWrap: "wrap" }}>
@@ -782,7 +833,7 @@ function VideoSection({ title, color, list, selectedIds, onToggle, T, golden }: 
       </div>
     </div>
   );
-}
+});
 
 // 세그먼트 선택
 function Seg({ label, value, opts, onPick, accent, T }: { label: string; value: string; opts: [string, string][]; onPick: (v: string) => void; accent: string; T: any }) {
