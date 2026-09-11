@@ -2224,6 +2224,35 @@ export function computeCareStatus(c: PostCare): { status: CareStatus; daysLeft?:
    서버시간 기준 만료판정은 license_status RPC(시계 조작 방지). */
 export type ToolLicense = { tool: "youtube" | "instagram"; expire_at: string | null; data_saver?: string; remain_sec?: number; plan?: string; allowed_actions?: string[]; bonus_quota?: number };
 export const TRAFFIC_PLAN_LIMIT: Record<string, number> = { basic: 30, pro: 60, premium: 120, unlimited: 0 }; // 0=무제한
+
+// 🌱 골든시드 등급별 골든아워(첫 30분) 액션 물량 한도.
+//   플랫폼(유튜브/인스타)·액션별로 등급이 올라갈수록 더 많이 꽂을 수 있다.
+//   unlimited(무제한)=관리자 전용 → 회원 사용표엔 노출 안 함. 관리자가 지정한 회원만 무제한(0=무제한).
+export type GsPlan = "basic" | "pro" | "premium" | "unlimited";
+// 회원에게 보여줄 등급(무제한 제외)
+export const GS_MEMBER_PLANS: GsPlan[] = ["basic", "pro", "premium"];
+export const GS_PLAN_LABEL: Record<GsPlan, string> = { basic: "베이직", pro: "프로", premium: "프리미엄", unlimited: "무제한" };
+// 액션별 등급 물량표(골든아워 30분 기준). 0 = 무제한.
+//   테리 실전 기준값(조회 300 : 좋아요 10 : 댓글 10)을 베이직으로, 등급 오를수록 증량.
+export const GS_PLAN_LIMITS: Record<"youtube" | "instagram", Record<string, Record<GsPlan, number>>> = {
+  youtube: {
+    view:      { basic: 300, pro: 1000, premium: 3000, unlimited: 0 },
+    watch:     { basic: 100, pro: 400,  premium: 1200, unlimited: 0 },
+    like:      { basic: 10,  pro: 40,   premium: 120,  unlimited: 0 },
+    comment:   { basic: 10,  pro: 30,   premium: 80,   unlimited: 0 },
+    subscribe: { basic: 5,   pro: 20,   premium: 60,   unlimited: 0 },
+    share:     { basic: 8,   pro: 30,   premium: 90,   unlimited: 0 },
+  },
+  instagram: {
+    view:    { basic: 300, pro: 1000, premium: 3000, unlimited: 0 },
+    like:    { basic: 10,  pro: 40,   premium: 120,  unlimited: 0 },
+    comment: { basic: 10,  pro: 30,   premium: 80,   unlimited: 0 },
+    follow:  { basic: 5,   pro: 20,   premium: 60,   unlimited: 0 },
+    share:   { basic: 12,  pro: 40,   premium: 120,  unlimited: 0 },
+    repost:  { basic: 2,   pro: 6,    premium: 15,   unlimited: 0 },
+    save:    { basic: 8,   pro: 30,   premium: 90,   unlimited: 0 },
+  },
+};
 // 📨 회원 → 관리자 로그 전송(traffic_logs). 관리자는 컨트롤타워에서 빨간 알림으로 확인.
 export async function sendTrafficLog(customer: string, name: string, content: string, memo = ""): Promise<void> {
   const { error } = await supabase.rpc("traffic_log_send", { p_customer: customer, p_name: name, p_content: content, p_memo: memo });

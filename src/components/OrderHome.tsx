@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "../lib/supabase";
+import { supabase, GS_PLAN_LIMITS, GS_MEMBER_PLANS, GS_PLAN_LABEL, GsPlan } from "../lib/supabase";
 
 /* ───────────────────────────────────────────────────────────
    🌱 골든시드 회원 주문 화면 (OrderHome) — 트래픽 계승.
@@ -19,7 +19,8 @@ const TOOLS: { key: ToolKey; label: string; desc: string; actions: [string, stri
     actions: [["view", "조회수", false], ["like", "좋아요", true], ["comment", "댓글", true], ["follow", "팔로우", true], ["share", "공유", false], ["repost", "리포스트", true], ["save", "저장", true]],
   },
 ];
-const PLANS: [string, string][] = [["basic", "베이직"], ["pro", "프로"], ["premium", "프리미엄"], ["unlimited", "무제한"]];
+// 회원 주문용 등급 = 무제한 제외(무제한은 관리자 전용). GS_MEMBER_PLANS 계승.
+const PLANS: [string, string][] = GS_MEMBER_PLANS.map(p => [p, GS_PLAN_LABEL[p]] as [string, string]);
 const PERIODS: [number, string][] = [[7, "7일"], [30, "30일"], [90, "90일"], [365, "1년"]];
 
 export default function OrderHome({ token, theme, memberName, approvedTools, onGoConsole }: {
@@ -136,7 +137,7 @@ export default function OrderHome({ token, theme, memberName, approvedTools, onG
 
                 {/* 등급 */}
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, marginBottom: 7 }}>등급</div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, marginBottom: 7 }}>등급 선택</div>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                     {PLANS.map(([k, lb]) => {
                       const sel = plan[t.key] === k;
@@ -144,6 +145,10 @@ export default function OrderHome({ token, theme, memberName, approvedTools, onG
                     })}
                   </div>
                 </div>
+
+                {/* 📊 등급별 사용표 — 선택한 액션의 골든아워 물량을 등급별로 한눈에 */}
+                <PlanTable toolKey={t.key} selectedActions={acts[t.key]} currentPlan={plan[t.key] as GsPlan} C={C} />
+
 
                 {/* 기간 */}
                 <div>
@@ -168,6 +173,47 @@ export default function OrderHome({ token, theme, memberName, approvedTools, onG
           {sending ? "주문 전송 중…" : `🌱 주문하기${chosen.length ? ` (${chosen.length}개 플랫폼)` : ""}`}
         </button>
       </div>
+    </div>
+  );
+}
+
+// 📊 등급별 사용표 — 선택한 액션의 골든아워 물량을 베이직/프로/프리미엄으로 비교(무제한 제외)
+function PlanTable({ toolKey, selectedActions, currentPlan, C }: {
+  toolKey: "youtube" | "instagram"; selectedActions?: Set<string>; currentPlan: GsPlan; C: any;
+}) {
+  const limits = GS_PLAN_LIMITS[toolKey];
+  // 선택한 액션이 있으면 그것만, 없으면 전체 액션 표시
+  const actIds = Object.keys(limits).filter(id => !selectedActions || selectedActions.size === 0 || selectedActions.has(id));
+  const ACT_LABEL: Record<string, string> = { view: "조회", watch: "시청", like: "좋아요", comment: "댓글", subscribe: "구독", follow: "팔로우", share: "공유", repost: "리포스트", save: "저장" };
+  const fmt = (n: number) => n === 0 ? "∞" : n.toLocaleString();
+  const th: React.CSSProperties = { padding: "7px 8px", fontSize: 11, fontWeight: 800, color: C.sub, textAlign: "center", borderBottom: `1px solid ${C.line2}` };
+  const td: React.CSSProperties = { padding: "7px 8px", fontSize: 12, fontWeight: 700, textAlign: "center", borderBottom: `1px solid ${C.line}` };
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 800, color: C.sub, marginBottom: 7 }}>📊 등급별 골든아워 물량 (30분 기준)</div>
+      <div style={{ overflowX: "auto", border: `1px solid ${C.line2}`, borderRadius: 10 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 260 }}>
+          <thead>
+            <tr>
+              <th style={{ ...th, textAlign: "left" }}>액션</th>
+              {GS_MEMBER_PLANS.map(p => (
+                <th key={p} style={{ ...th, color: currentPlan === p ? C.accent : C.sub, background: currentPlan === p ? C.glow : "transparent" }}>{GS_PLAN_LABEL[p]}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {actIds.map(id => (
+              <tr key={id}>
+                <td style={{ ...td, textAlign: "left", color: C.ink }}>{ACT_LABEL[id] || id}</td>
+                {GS_MEMBER_PLANS.map(p => (
+                  <td key={p} style={{ ...td, color: currentPlan === p ? C.accent : C.ink, background: currentPlan === p ? C.glow : "transparent", fontFamily: "'JetBrains Mono',monospace" }}>{fmt(limits[id][p])}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ fontSize: 10.5, color: C.sub, marginTop: 5, fontWeight: 600 }}>* 숫자 = 골든아워(첫 30분)에 꽂는 최대 물량. 무제한 등급은 관리자 지정 회원만 제공돼요.</div>
     </div>
   );
 }

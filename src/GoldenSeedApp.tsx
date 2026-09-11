@@ -55,7 +55,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
       // 승인이 하나라도 있으면 처음부터 콘솔을 볼 수 있게(단, 첫 로드시 승인 없으면 주문화면 유지)
     };
     void load();
-    const iv = window.setInterval(load, 4000);   // 관리자가 승인/취소하면 4초 내 반영
+    const iv = window.setInterval(load, 2000);   // ★2초 실시간 — 관리자가 승인/등급수정/기능변경하면 2초 내 반영(트래픽 동일)
     return () => { alive = false; window.clearInterval(iv); };
   }, [user.email]);
 
