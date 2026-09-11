@@ -164,20 +164,22 @@ function SeedingPanel({ platform, showToast, T, dark }: { platform: Platform; sh
   const toggleAction = (id: string) => setActions((a) => ({ ...a, [id]: { ...a[id], on: !a[id].on } }));
   const setQty = (id: string, v: number) => setActions((a) => ({ ...a, [id]: { ...a[id], qty: Math.max(0, v) } }));
 
-  function start(resume = false) {
+  // ★트래픽 계승(2026-09-07 테리): '이어하기' 개념 제거 — 시작은 항상 새 설정으로 처음부터.
+  //   (이어하기가 최초 설정을 물고 가서 수정한 설정이 무시되던 버그 방지.)
+  function start() {
     if (running) return;
     if (!videoUrl.trim()) { showToast?.("URL을 입력하세요", "error"); return; }
     const picked = defs.filter((d) => actions[d.id]?.on && actions[d.id].qty > 0);
     if (!picked.length) { showToast?.("실행할 액션을 하나 이상 켜세요", "error"); return; }
     if (commentOn && !aiKey.trim()) { showToast?.("댓글은 AI 키가 필요해요", "error"); return; }
 
-    if (!resume) setStats({ views: 0, success: 0, fail: 0 });
+    setStats({ views: 0, success: 0, fail: 0 });
     const jobId = Date.now().toString();
     jobRef.current = jobId;
     setRunning(true);
 
     // ── 디테일 로그(1~N) — 트래픽처럼 단계별로 상세하게 ──
-    pushLog("sys", `${resume ? "▶️ 이어서 시딩" : "▶️ 시딩 시작"} — ${isYt ? "유튜브" : "인스타"} · ${CONTENT[platform].find((c) => c[0] === contentType)?.[1]}`);
+    pushLog("sys", `▶️ 시딩 시작 — ${isYt ? "유튜브" : "인스타"} · ${CONTENT[platform].find((c) => c[0] === contentType)?.[1]}`);
     pushLog("log", `🌐 대상 URL: ${videoUrl.trim()}`);
     pushLog("log", `🧭 게이트웨이: ${gateway === "instagram" ? "인스타 referrer" : gateway === "facebook" ? "페북 referrer" : "직접"} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
@@ -313,12 +315,11 @@ function SeedingPanel({ platform, showToast, T, dark }: { platform: Platform; sh
         )}
       </div>
 
-      {/* ▶ 실행 컨트롤 — 로그와 분리된 독립 버튼바(테리 지시: 시작/정지/이어서는 로그 밖에) */}
+      {/* ▶ 실행 컨트롤 — 로그와 분리된 독립 버튼바(테리 지시: 시작/정지/창보기는 로그 밖에. 이어서는 트래픽처럼 제거) */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         {!running
-          ? <RunBtn onClick={() => start(false)} T={T} title="시딩 시작" primary>▶ 시딩 시작</RunBtn>
+          ? <RunBtn onClick={start} T={T} title="시딩 시작" primary>▶ 시딩 시작</RunBtn>
           : <RunBtn onClick={stop} T={T} title="정지" danger>■ 정지</RunBtn>}
-        <RunBtn onClick={() => start(true)} T={T} title="이어서 하기(로그 유지)" disabled={running}>↻ 이어서</RunBtn>
         <RunBtn onClick={() => { setVisible((v) => !v); showToast?.(visible ? "창 보기 끔" : "창 보기 켬 — 다음 실행부터 봇 창 표시", "info"); }} T={T} active={visible} title="실제 봇 브라우저 창 보기">🚪 창 보기</RunBtn>
       </div>
 
@@ -329,7 +330,7 @@ function SeedingPanel({ platform, showToast, T, dark }: { platform: Platform; sh
           <span style={{ fontSize: 11.5, color: "#d8cdb4", fontFamily: F_MONO, letterSpacing: ".03em", marginRight: "auto" }}>
             LIVE LOG · <span style={{ color: isYt ? "#ff6b6b" : T.gold, fontWeight: 800 }}>{isYt ? "유튜브" : "인스타"}</span>
           </span>
-          {/* 로그 관련 버튼만 — 실행(시작/정지/이어서)은 로그 밖 별도 버튼바로 분리 */}
+          {/* 로그 관련 버튼만 — 실행(시작/정지)은 로그 밖 별도 버튼바로 분리 */}
           <LogBtn onClick={() => setLogZoom(true)} T={T} title="로그 크게 보기">🔍 크게보기</LogBtn>
           <LogBtn onClick={copyLog} T={T} title="로그 복사">📋 복사</LogBtn>
           <LogBtn onClick={clearLog} T={T} title="로그 지우기">🧹 비우기</LogBtn>
