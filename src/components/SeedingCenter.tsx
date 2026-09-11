@@ -174,12 +174,27 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
   ]);
   const [stats, setStats] = useState({ views: 0, success: 0, fail: 0 });
   const [logZoom, setLogZoom] = useState(false);   // 🔍 로그 크게 보기(앱 내 모달, 트래픽 계승)
+  // ⏱️ 골든아워 스케줄러 상태
+  const [ghTarget, setGhTarget] = useState(0);      // 이번 실행 목표 조회 물량
+  const [ghDone, setGhDone] = useState(0);          // 실행된 조회 수
+  const [ghElapsed, setGhElapsed] = useState(0);    // 경과 초
+  const GH_WINDOW = 30 * 60;                         // 골든아워 = 30분(초)
   const esRef = useRef<BotEventStream | null>(null);
   const jobRef = useRef<string>("");
   const logEndRef = useRef<HTMLDivElement | null>(null);
+  const schedRef = useRef<{ stop: boolean; timer: any; started: number }>({ stop: false, timer: null, started: 0 });
 
   useEffect(() => { logEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
   useEffect(() => () => { esRef.current?.close(); }, []);
+
+  // 골든아워 실행 중 경과초 1초마다 갱신(진행바·남은시간)
+  useEffect(() => {
+    if (!running) return;
+    const iv = window.setInterval(() => {
+      if (schedRef.current.started) setGhElapsed(Math.floor((Date.now() - schedRef.current.started) / 1000));
+    }, 1000);
+    return () => window.clearInterval(iv);
+  }, [running]);
 
   // 등급(plan) 바뀌면 각 액션 물량을 그 등급 상한으로 clamp(기본값이 상한보다 크면 낮춤)
   useEffect(() => {
@@ -234,28 +249,12 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     }
 
     // 조회(view)만 실제 봇 연동(STEP1). 나머지는 계정 붙는대로 순차 연결.
-    if (actions["view"]?.on) {
-      const q = new URLSearchParams({
-        videoUrl: videoUrl.trim(), videoType: contentType === "longform" ? "longform" : "shorts",
-        gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId,
-      });
-      try {
-        const es = new BotEventStream(`${YT_BOT}/api/seed/view?${q}`, { method: "GET" });
-        esRef.current = es;
-        es.onmessage = (ev) => {
-          try {
-            const d = JSON.parse(ev.data);
-            if (d.type === "log") pushLog("log", d.msg);
-            else if (d.type === "seed_done") {
-              pushLog(d.status === "success" ? "ok" : "err", d.status === "success" ? `✅ 조회 완료 (watch ${d.watchedSeconds}s)` : `❌ 실패: ${d.error || ""}`);
-              setStats((s) => ({ views: s.views + (d.status === "success" ? 1 : 0), success: s.success + (d.status === "success" ? 1 : 0), fail: s.fail + (d.status === "success" ? 0 : 1) }));
-              stop();
-            } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); stop(); }
-          } catch {}
-        };
-        es.onerror = (detail) => pushLog("err", `⚠️ 봇 연결 실패 — ${detail || "youtube-bot(3366) 실행 확인"}`);
-        es.onclose = () => setRunning(false);
-      } catch (e: any) { pushLog("err", `❌ 시작 실패: ${e.message}`); setRunning(false); }
+    if (actions["view"]?.on && actions["view"].qty > 0) {
+      const total = actions["view"].qty;
+      setGhTarget(total); setGhDone(0); setGhElapsed(0);
+      schedRef.current = { stop: false, timer: null, started: Date.now() };
+      pushLog("sys", `⏱️ 골든아워 스케줄러 시작 — 30분에 걸쳐 조회 ${total}회를 자연 성장곡선(초반 집중→테이퍼링)으로 시딩합니다`);
+      runGoldenHour(total, jobId);
     } else {
       pushLog("sys", "ℹ️ 조회 외 액션은 계정 워밍업(STEP2+) 후 연결됩니다 — 물량 설정은 저장돼요.");
       setRunning(false);
@@ -264,10 +263,71 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
     picked.filter((d) => d.id !== "view").forEach((d) => pushLog("log", `⏳ ${d.icon} ${d.label} ×${actions[d.id].qty} — 준비 중(계정 연결 후 실행)`));
   }
 
+  // ⏱️ 골든아워 곡선 — 30분 창을 n개 조회로 나누되 초반 집중→후반 성김(자연 성장곡선, 레드라인 회피).
+  //   i번째 조회 시각 = W * (i/n)^k (k>1이면 초반 밀집). 여기선 k=1.7. 각 조회는 순차 실행(봇 1개).
+  function scheduleAt(i: number, n: number): number {
+    const k = 1.7;                                   // 곡선 강도(초반 몰빵 정도)
+    const frac = Math.pow(i / Math.max(1, n), k);    // 0~1
+    // 골든아워의 앞 85%(25.5분)에 물량을 뿌리고, 뒤 15%는 여운(중간중간 섞기 여지)
+    return Math.floor(frac * GH_WINDOW * 0.85 * 1000); // ms
+  }
+
+  // 다음 조회를 곡선 시각에 맞춰 예약 실행(순차)
+  function runGoldenHour(total: number, jobId: string) {
+    let done = 0;
+    const runNext = () => {
+      if (schedRef.current.stop) { setRunning(false); return; }
+      if (done >= total) {
+        pushLog("ok", `🎉 골든아워 시딩 완료 — 조회 ${done}회 (성공 곡선대로 시딩됨)`);
+        setRunning(false); return;
+      }
+      const idx = done;   // 0-based
+      const started = schedRef.current.started;
+      const targetMs = scheduleAt(idx, total);
+      const waitMs = Math.max(0, targetMs - (Date.now() - started));
+      schedRef.current.timer = setTimeout(() => {
+        if (schedRef.current.stop) { setRunning(false); return; }
+        setGhElapsed(Math.floor((Date.now() - started) / 1000));
+        runOneView(jobId + "_" + idx, () => { done += 1; setGhDone(done); runNext(); });
+      }, waitMs);
+    };
+    runNext();
+  }
+
+  // 조회 1건 실행(SSE) — 끝나면 onDone 콜백으로 다음 예약
+  function runOneView(jobId: string, onDone: () => void) {
+    const q = new URLSearchParams({
+      videoUrl: videoUrl.trim(), videoType: contentType === "longform" ? "longform" : "shorts",
+      gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId,
+    });
+    jobRef.current = jobId;
+    try {
+      const es = new BotEventStream(`${YT_BOT}/api/seed/view?${q}`, { method: "GET" });
+      esRef.current = es;
+      let finished = false;
+      const finish = () => { if (finished) return; finished = true; es.close(); esRef.current = null; onDone(); };
+      es.onmessage = (ev) => {
+        try {
+          const d = JSON.parse(ev.data);
+          if (d.type === "log") pushLog("log", d.msg);
+          else if (d.type === "seed_done") {
+            pushLog(d.status === "success" ? "ok" : "err", d.status === "success" ? `✅ 조회 완료 (watch ${d.watchedSeconds}s)` : `❌ 실패: ${d.error || ""}`);
+            setStats((s) => ({ views: s.views + (d.status === "success" ? 1 : 0), success: s.success + (d.status === "success" ? 1 : 0), fail: s.fail + (d.status === "success" ? 0 : 1) }));
+            finish();
+          } else if (d.type === "error") { pushLog("err", `❌ ${d.msg}`); finish(); }
+        } catch {}
+      };
+      es.onerror = (detail) => { pushLog("err", `⚠️ 봇 연결 실패 — ${detail || "youtube-bot(3366) 실행 확인"}`); finish(); };
+    } catch (e: any) { pushLog("err", `❌ 실행 실패: ${e.message}`); onDone(); }
+  }
+
   function stop() {
+    schedRef.current.stop = true;
+    if (schedRef.current.timer) { clearTimeout(schedRef.current.timer); schedRef.current.timer = null; }
     esRef.current?.close(); esRef.current = null;
     if (jobRef.current) botFetch(`${YT_BOT}/api/stop/${jobRef.current}`, { method: "POST" }).catch(() => {});
     setRunning(false);
+    pushLog("sys", "⏹ 시딩을 정지했어요.");
   }
   const copyLog = () => {
     navigator.clipboard.writeText(logs.map((l) => `[${new Date(l.t).toLocaleTimeString("ko-KR", { hour12: false })}] ${l.msg}`).join("\n"))
@@ -295,6 +355,32 @@ function SeedingPanel({ platform, showToast, T, dark, allowedActions, plan }: { 
           </div>
         ))}
       </div>
+
+      {/* ⏱️ 골든아워 진행바 — 실행 중일 때 (30분 창 + 물량 진행률) */}
+      {running && ghTarget > 0 && (() => {
+        const remainSec = Math.max(0, GH_WINDOW - ghElapsed);
+        const mm = String(Math.floor(remainSec / 60)).padStart(2, "0");
+        const ss = String(remainSec % 60).padStart(2, "0");
+        const qtyPct = Math.min(100, Math.round((ghDone / ghTarget) * 100));
+        const timePct = Math.min(100, Math.round((ghElapsed / GH_WINDOW) * 100));
+        return (
+          <div style={{ background: `linear-gradient(140deg,${T.panel2},${T.panel})`, border: `1px solid ${T.gold}`, borderRadius: 14, padding: "13px 15px", marginBottom: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.gold }}>⏱️ 골든아워 진행 중</span>
+              <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>조회 {ghDone}/{ghTarget}회 · 초반 집중→테이퍼링</span>
+              <span style={{ marginLeft: "auto", fontFamily: F_MONO, fontSize: 13, fontWeight: 800, color: T.ink }}>남은 {mm}:{ss}</span>
+            </div>
+            {/* 물량 진행바 */}
+            <div style={{ height: 8, borderRadius: 99, background: T.line, overflow: "hidden", marginBottom: 6 }}>
+              <div style={{ height: "100%", width: `${qtyPct}%`, borderRadius: 99, background: `linear-gradient(90deg,${T.gold},${T.goldDim})`, transition: "width .4s" }} />
+            </div>
+            {/* 시간 진행바(30분) */}
+            <div style={{ height: 4, borderRadius: 99, background: T.line, overflow: "hidden" }}>
+              <div style={{ height: "100%", width: `${timePct}%`, borderRadius: 99, background: "#7dd88a", transition: "width 1s linear" }} />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 실행 패널 */}
       <div style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 16, padding: 16, marginBottom: 14 }}>
