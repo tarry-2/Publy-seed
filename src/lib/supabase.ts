@@ -2262,28 +2262,17 @@ export async function sendTrafficLog(customer: string, name: string, content: st
 export async function getTrafficLicenses(customer: string): Promise<ToolLicense[]> {
   if (!customer) return [];
   try {
-    // 2초 폴링에 견디게 쿼리 최소화: select 1 + 서버시간 1(RPC 루프 제거).
-    //   시계 조작 방지 = 로컬시계 대신 DB 시간 기준으로 remain_sec 계산.
-    const { data, error } = await supabase
-      .from("tool_licenses")
-      .select("tool,expire_at,data_saver,plan,allowed_actions,bonus_quota")
-      .eq("customer", customer)
-      .in("tool", ["youtube", "instagram"]);
+    // 🔴 골든시드는 RLS ON → tool_licenses .from() 직접조회는 anon이 막힘([]).
+    //   반드시 my_licenses RPC(SECURITY DEFINER)로 읽는다. server_now도 함께 와서 시계조작 방지.
+    const { data, error } = await supabase.rpc("my_licenses", { p_customer: customer });
     if (error || !data) return [];
-    const rows = data as any[];
+    const rows = (data as any[]).filter((r) => r.tool === "youtube" || r.tool === "instagram");
     if (!rows.length) return [];
-    // 서버시간 1회 조회(첫 기능 license_status의 server_now 재사용). 없으면 로컬시계 폴백.
-    let serverMs = 0;
-    try {
-      const { data: st } = await supabase.rpc("license_status", { p_customer: customer, p_tool: rows[0].tool });
-      const s = Array.isArray(st) ? st[0] : st;
-      if (s?.server_now) serverMs = new Date(s.server_now).getTime();
-    } catch {}
-    if (!serverMs) serverMs = Date.now();
+    const serverMs = rows[0]?.server_now ? new Date(rows[0].server_now).getTime() : Date.now();
     return rows.map((row) => {
       const exp = row.expire_at ? new Date(row.expire_at).getTime() : 0;
       const remain = exp ? Math.max(0, Math.floor((exp - serverMs) / 1000)) : 0;
-      return { tool: row.tool, expire_at: row.expire_at, data_saver: row.data_saver, remain_sec: remain, plan: row.plan || "basic", allowed_actions: Array.isArray(row.allowed_actions) ? row.allowed_actions : [], bonus_quota: row.bonus_quota || 0 };
+      return { tool: row.tool, expire_at: row.expire_at, remain_sec: remain, plan: row.plan || "basic", allowed_actions: Array.isArray(row.allowed_actions) ? row.allowed_actions : [], bonus_quota: row.bonus_quota || 0 };
     });
   } catch { return []; }
 }

@@ -137,6 +137,21 @@ $$;
 revoke all on function public.license_status(text, text) from public;
 grant execute on function public.license_status(text, text) to anon, authenticated;
 
+-- 🎫 내 라이선스 전체(회원) — RLS 켜져 있어 .from() 직접조회가 막히므로 RPC로 조회.
+--   회원 앱(getTrafficLicenses)이 이걸 써서 승인된 tool·action·plan·만료를 읽는다.
+create or replace function public.my_licenses(p_customer text)
+returns table(tool text, plan text, allowed_actions jsonb, expire_at timestamptz, bonus_quota integer, server_now timestamptz)
+language sql
+security definer
+set search_path = ''
+as $$
+  select l.tool, l.plan, l.allowed_actions, l.expire_at, l.bonus_quota, now() as server_now
+  from public.tool_licenses l
+  where l.customer = p_customer;
+$$;
+revoke all on function public.my_licenses(text) from public;
+grant execute on function public.my_licenses(text) to anon, authenticated;
+
 -- ════════════════════════════════════════════════════════════════
 -- 관리자용 RPC (모두 publy_admin_session_get(p_token)으로 검증)
 -- ════════════════════════════════════════════════════════════════
