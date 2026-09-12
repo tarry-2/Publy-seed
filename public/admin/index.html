@@ -350,15 +350,23 @@
 
             <!-- ── 🌱 육성 탭 (준비 중 그릇) ── -->
             <div class="tw-tabpane" data-twpane="grow" style="display:none">
+              <!-- 🪪 프로필 자동 세팅 -->
               <div class="tw-panel">
-                <div class="tw-panel-h">🌱 계정 육성</div>
-                <div class="muted" style="font-size:12px;line-height:1.7">갓 만든 계정을 밴 없이 키우는 기능이 여기 들어와요.<br><br>
-                  • 프로필 자동 세팅(블로그명·소개·사진)<br>
-                  • 워밍업(이웃·공감·댓글로 활동이력)<br>
-                  • 서로이웃 맺기<br>
-                  • 계정 건강 체크(저품질·블럭·캡차 감지)<br><br>
-                  <span style="color:var(--gold);font-weight:700">🚧 다음 단계에서 제작</span>
+                <div class="tw-panel-h">🪪 프로필 자동 세팅</div>
+                <div class="muted" style="font-size:11.5px;line-height:1.6;margin-bottom:10px">왼쪽에서 선택한 계정의 <b>블로그명·소개</b>를 네이버에 자동 입력해요(gs_accounts에 등록된 값 사용). 빈 계정=봇티 → 채워야 노출·생존.</div>
+                <button class="btn gold sm" id="twProfileRun" style="width:100%">🪪 선택 계정 프로필 세팅 (<span id="twProfileCount">0</span>개)</button>
+                <div class="muted" style="font-size:10.5px;margin-top:6px">※ 진행은 아래 📋 발행 로그에 떠요. 창 보기 ON이면 실제 크롬 창도 봐요.</div>
+              </div>
+              <!-- 🔥 워밍업(품앗이) -->
+              <div class="tw-panel">
+                <div class="tw-panel-h">🔥 워밍업 <span class="muted" style="font-weight:600">— 품앗이(계정끼리 서로 공감·댓글)</span></div>
+                <div class="muted" style="font-size:11.5px;line-height:1.6;margin-bottom:10px">선택한 계정끼리 서로 공감·댓글로 활동이력을 쌓아 밴을 막아요(하루 소량·사람 범위). <b>2개 이상</b> 선택 필요.</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                  <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" id="twWarmLike" checked> ❤️ 공감</label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" id="twWarmComment"> 💬 댓글</label>
                 </div>
+                <button class="btn gold sm" id="twWarmRun" style="width:100%">🔥 선택 계정 워밍업 시작 (<span id="twWarmCount">0</span>개)</button>
+                <div class="muted" style="font-size:10.5px;margin-top:6px">※ 진행은 📋 발행 로그에. neighbor-bot(3364) 필요(앱 실행 시 자동).</div>
               </div>
             </div>
 
@@ -898,6 +906,60 @@
   $('pxReload').onclick=pxLoad;
   pxLoad();
 
+  // ── 🪪 프로필 자동 세팅 (선택 계정 순회) ──
+  $('twProfileRun').onclick=async()=>{
+    const queue=twSelectedRows();
+    if(!queue.length){ alert('왼쪽에서 계정을 먼저 선택하세요'); return; }
+    const b=$('twProfileRun'); b.disabled=true;
+    twPush('━━━━━ 🪪 프로필 자동 세팅 시작 · '+queue.length+'개 계정 ━━━━━',C.sys);
+    let ok=0,fail=0;
+    for(let i=0;i<queue.length;i++){
+      const acc=queue[i], label=acc.blog_name||acc.login, userId='gs_'+acc.id;
+      twPush('┏━ ['+(i+1)+'/'+queue.length+'] '+label+' ('+acc.login+') 프로필 세팅…',C.acct);
+      try{
+        const r=await fetch(BOT+'/api/profile-setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId,blogName:acc.blog_name,bio:acc.bio,profileImageUrl:acc.profile_image_url,showWindow:twShowWin,useProxy:twUseProxy})});
+        const d=await r.json().catch(()=>({}));
+        if(Array.isArray(d.logs)) d.logs.forEach(m=>twPush('┃ '+m,C.step));
+        if(d.ok){ ok++; twPush('┗━ ✅ 완료: '+(d.changed||[]).join(', '),C.ok);
+          try{ await sb.rpc('gs_seed_set_status',{p_token:TOKEN,p_id:acc.id,p_status:'profiled'}); }catch(e){}
+        } else { fail++; twPush('┗━ ⚠️ '+(d.error||'변경 없음')+' (셀렉터 교정 필요할 수 있음)',C.warn); }
+      }catch(e){ fail++; twPush('┗━ ❌ '+e.message+' (앱 발행봇 실행 확인)',C.err); }
+    }
+    twPush('━━━━━ 🪪 프로필 세팅 종료 · 완료 '+ok+' · 실패 '+fail+' ━━━━━',fail===0?C.ok:C.warn);
+    b.disabled=false; twLoad();
+  };
+
+  // ── 🔥 워밍업(품앗이 SSE, neighbor-bot 3364) ──
+  const NBOT='http://localhost:3364';
+  $('twWarmRun').onclick=async()=>{
+    const queue=twSelectedRows();
+    if(queue.length<2){ alert('워밍업(품앗이)은 계정 2개 이상 선택해야 해요'); return; }
+    const doLike=$('twWarmLike').checked, doComment=$('twWarmComment').checked;
+    if(!doLike&&!doComment){ alert('공감 또는 댓글 중 하나는 켜세요'); return; }
+    const b=$('twWarmRun'); b.disabled=true;
+    twPush('━━━━━ 🔥 워밍업(품앗이) 시작 · '+queue.length+'개 계정 ━━━━━',C.sys);
+    twPush('👥 서로 '+(doLike?'공감':'')+(doLike&&doComment?'·':'')+(doComment?'댓글':'')+' (하루 소량·사람 범위)',C.info);
+    try{
+      const accounts=queue.map(a=>({accountId:'gs_'+a.id,blogId:a.blog_name||a.login,posts:2,receiveLimit:2}));
+      const res=await fetch(NBOT+'/api/pumasi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts,doLike,doComment,delayMin:8,delayMax:15})});
+      if(!res.ok||!res.body){ twPush('❌ 워밍업 시작 실패(HTTP '+res.status+') — neighbor-bot(3364) 실행 확인',C.err); b.disabled=false; return; }
+      const reader=res.body.getReader(), dec=new TextDecoder(); let buf='';
+      while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+        const parts=buf.split('\n\n'); buf=parts.pop()||'';
+        for(const p of parts){ const line=p.split('\n').find(l=>l.startsWith('data:')); if(!line)continue;
+          try{ const d=JSON.parse(line.slice(5).trim());
+            if(d.type==='log') twPush('┃ '+d.msg,C.step);
+            else if(d.type==='result') twPush('  '+(d.status==='success'?'✅':'⚠️')+' '+(d.blogId||'')+' '+(d.action||''),d.status==='success'?C.ok:C.warn);
+            else if(d.type==='progress') $('twProgress').textContent='🔥 완료 '+d.done+' · 실패 '+d.fail+' · 스킵 '+d.skip;
+            else if(d.type==='error') twPush('❌ '+d.msg,C.err);
+            else if(d.type==='done') twPush('━━━━━ 🔥 워밍업 종료 ━━━━━',C.ok);
+          }catch(e){}
+        }
+      }
+    }catch(e){ twPush('❌ 워밍업 오류: '+e.message,C.err); }
+    b.disabled=false; twLoad();
+  };
+
   // 💬 인사말 (localStorage 저장 + 상태)
   function twGreetSync(){ $('twGreetState').textContent=($('twGreet').value.trim()?'✅ 있음':''); }
   (function(){ $('twGreet').value=localStorage.getItem('gs_tw_greeting')||''; twGreetSync(); })();
@@ -950,6 +1012,7 @@
     $('twTotalCount').textContent=twRows.length;
     $('twShownCount').textContent=rows.length;
     $('twSelCount').textContent=twSel.size;
+    { const pc=document.getElementById('twProfileCount'); if(pc) pc.textContent=twSel.size; const wc=document.getElementById('twWarmCount'); if(wc) wc.textContent=twSel.size; }
     if(!twRows.length){ box.innerHTML='<div class="muted" style="padding:12px">등록된 계정이 없어요. 아래 계정농사에서 먼저 등록하세요.</div>'; $('twPager').innerHTML=''; return; }
     if(!rows.length){ box.innerHTML='<div class="muted" style="padding:12px">검색/필터에 맞는 계정이 없어요.</div>'; $('twPager').innerHTML=''; return; }
     const pages=Math.ceil(rows.length/TW_PAGE);

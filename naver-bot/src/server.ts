@@ -3,7 +3,7 @@ import cors from "cors";
 import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
-import { saveNaverSession, publishNaver, activateNaverAccount, naverSessionExists, generateFlowImages, generateFlowImagesCDP, getNaverCategories, saveGoogleSession, googleSessionExists, deleteNaverSession, deleteGoogleSession } from "./naver";
+import { saveNaverSession, publishNaver, activateNaverAccount, naverSessionExists, generateFlowImages, generateFlowImagesCDP, getNaverCategories, saveGoogleSession, googleSessionExists, deleteNaverSession, deleteGoogleSession, setupNaverProfile } from "./naver";
 import { saveTistorySession, publishTistory, tistorySessionExists, deleteTistorySession } from "./tistory";
 import { fetchPendingJobs, updateJob, claimPendingJob, finishQueuedHistory, useQuota, refundQuota, checkPublishEntitlement, incrementDailyPublish } from "./supabase";
 import { acquireAccountLock } from "./account-lock";
@@ -220,6 +220,19 @@ app.post("/api/flow/launch", async (req, res) => {
     if (await flowChromeHealthy(slot)) return res.json({ ok: true, launched: true, slot, port: flowCdpPort(slot) });
   }
   res.status(504).json({ ok: false, error: "크롬은 떴지만 준비 확인 실패. 잠시 후 다시 시도하세요." });
+});
+
+/* ── 🌱 프로필 자동 세팅 (계정 육성) ── */
+app.post("/api/profile-setup", async (req, res) => {
+  const { userId, blogName, bio, profileImageUrl, showWindow, useProxy } = req.body || {};
+  if (!userId) return res.status(400).json({ ok: false, error: "userId 필요" });
+  const logs: string[] = [];
+  try {
+    const r = await setupNaverProfile({ userId, blogName, bio, profileImageUrl, showWindow: showWindow === true || showWindow === "true", useProxy: useProxy === true || useProxy === "true", onLog: (m) => { logs.push(m); console.log(m); } });
+    res.json({ ...r, logs });
+  } catch (e: any) {
+    res.status(500).json({ ok: false, error: e?.message, logs });
+  }
 });
 
 /* ── 🌐 프록시 검사 — 그 프록시로 실제 접속해 나가는 IP·응답시간 확인 ── */

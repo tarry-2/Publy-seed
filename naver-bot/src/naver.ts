@@ -301,6 +301,81 @@ export async function ensureLiveSessionNaver(userId: string, log: (m: string) =>
   throw new Error("로그인 재연결에 실패했어요. 계정 관리에서 '연결하기'를 한 번 눌러 직접 로그인해주세요.");
 }
 
+/* ── 🌱 프로필 자동 세팅 (계정 육성) ──
+   블로그명·소개(bio)·프로필 사진을 네이버 블로그 관리 페이지에서 자동 입력.
+   ★네이버 DOM은 실측으로만 확정 → 진단로그를 단계마다 심어 어디서 막히는지 한 방에 나오게.
+   실패해도 예외 안 던지고 {ok, log} 반환(육성 루프가 다음 계정으로). */
+export async function setupNaverProfile(params: {
+  userId: string; blogName?: string; bio?: string; profileImageUrl?: string;
+  showWindow?: boolean; useProxy?: boolean;
+  onLog?: (m: string) => void;
+}): Promise<{ ok: boolean; changed: string[]; error?: string }> {
+  const { userId, blogName, bio, profileImageUrl, showWindow = false, useProxy = false, onLog } = params;
+  const log = onLog || console.log;
+  const changed: string[] = [];
+  let browser: any = null;
+  try {
+    const cookies = await ensureLiveSessionNaver(userId, log);
+    const session = readSession<any>(naverSessionName(userId), LEGACY_SESSION_DIRS);
+    const blogId = session.blogId || session.loginId || "";
+    log(`[프로필] 🌱 세팅 시작 — 계정 ${userId} · 블로그 ${blogId}`);
+
+    let proxyOpt: any = undefined;
+    if (useProxy) {
+      try { const p = stickifyDataImpulse(await getProxyForNationality("kr")); if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; log(`[프로필] 🌐 프록시 ${maskProxy(p)}`); } } catch {}
+    }
+    browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 60 : 0, proxy: proxyOpt });
+    const context = await browser.newContext();
+    await context.addCookies(cookies);
+    const page = await context.newPage();
+
+    // 블로그 관리 > 기본정보(블로그명·소개) 페이지. ★URL·셀렉터는 실측 교정 대상.
+    const mgmtUrl = `https://admin.blog.naver.com/BasicInfo.naver?blogId=${encodeURIComponent(blogId)}`;
+    log(`[프로필] ▶ 관리 페이지 진입: ${mgmtUrl}`);
+    await page.goto(mgmtUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(1500);
+    log(`[프로필] 현재 URL: ${page.url()}`);
+    if (/nidlogin|nid\.naver\.com/i.test(page.url())) { throw new Error("세션 만료 — 로그인 페이지로 튕김(재연결 필요)"); }
+
+    // 블로그명
+    if (blogName && blogName.trim()) {
+      const sels = ["#blogName", "input[name='blogName']", "input[id*='blogName']"];
+      let done = false;
+      for (const s of sels) { try { const el = await page.$(s); if (el) { await el.click({ clickCount: 3 }); await el.fill(blogName.trim()); changed.push("블로그명"); done = true; log(`[프로필] ✅ 블로그명 입력: ${blogName.trim()} (셀렉터 ${s})`); break; } } catch {} }
+      if (!done) log(`[프로필] ⚠️ 블로그명 입력칸 못 찾음 — 셀렉터 교정 필요(위 URL/DOM 확인)`);
+    }
+    // 소개
+    if (bio && bio.trim()) {
+      const sels = ["#blogIntro", "textarea[name='blogIntro']", "textarea[id*='intro']", "textarea[id*='Intro']"];
+      let done = false;
+      for (const s of sels) { try { const el = await page.$(s); if (el) { await el.click({ clickCount: 3 }); await el.fill(bio.trim()); changed.push("소개"); done = true; log(`[프로필] ✅ 소개 입력 (셀렉터 ${s})`); break; } } catch {} }
+      if (!done) log(`[프로필] ⚠️ 소개 입력칸 못 찾음 — 셀렉터 교정 필요`);
+    }
+    // 프로필 사진(URL) — 파일 업로드는 다운로드 필요, 우선 진단만
+    if (profileImageUrl && profileImageUrl.trim()) {
+      log(`[프로필] ℹ️ 프로필 사진 업로드는 파일 다운로드 단계 필요(다음 반복에서 구현). URL=${profileImageUrl.slice(0, 60)}`);
+    }
+
+    // 저장 버튼 — ★셀렉터 실측 교정 대상
+    if (changed.length) {
+      const saveSels = ["a.btn_save", "button.btn_save", "a[onclick*='save']", "button:has-text('확인')", "a:has-text('확인')"];
+      let saved = false;
+      for (const s of saveSels) { try { const el = await page.$(s); if (el && await el.isVisible()) { await el.click(); saved = true; log(`[프로필] 💾 저장 클릭 (셀렉터 ${s})`); break; } } catch {} }
+      if (!saved) log(`[프로필] ⚠️ 저장 버튼 못 찾음 — 셀렉터 교정 필요(입력은 됨)`);
+      await page.waitForTimeout(2000);
+    }
+
+    await browser.close();
+    const ok = changed.length > 0;
+    log(`[프로필] ${ok ? "✅ 완료" : "⚠️ 변경된 항목 없음"} — 변경: ${changed.join(", ") || "없음"}`);
+    return { ok, changed };
+  } catch (e: any) {
+    try { if (browser) await browser.close(); } catch {}
+    log(`[프로필] ❌ 실패: ${e?.message}`);
+    return { ok: false, changed, error: e?.message };
+  }
+}
+
 /* ── 카테고리 목록 조회 ── */
 export async function getNaverCategories(
   userId: string
