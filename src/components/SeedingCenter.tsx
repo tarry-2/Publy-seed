@@ -337,6 +337,10 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
     if (commentOn && !aiKey.trim()) { showToast?.("댓글은 AI 키가 필요해요", "error"); return; }
 
     setStats({ views: 0, success: 0, fail: 0 });
+    // 🔴 정지 플래그 리셋 — 이전에 정지(■)를 눌렀으면 schedRef.current.stop=true가 남아
+    //   runVideo 첫 줄(if stop→setRunning(false))에서 즉시 꺼져 "시작 눌러도 그대로"였다.
+    //   모든 실행이 start()에서 시작하므로 여기서 stop을 반드시 false로 되돌린다.
+    schedRef.current.stop = false;
     const jobId = Date.now().toString();
     jobRef.current = jobId;
     setRunning(true);
