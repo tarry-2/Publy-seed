@@ -279,6 +279,7 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
   const [ghElapsed, setGhElapsed] = useState(0);    // 경과 초
   const [queueIdx, setQueueIdx] = useState(0);      // 큐: 현재 영상 순번(1-based)
   const [queueTotal, setQueueTotal] = useState(0);  // 큐: 전체 영상 수
+  const [ghGolden, setGhGolden] = useState(false);  // 현재 영상이 🔥골든아워(업로드30분내)인가 — 진행바/곡선 분기
   const GH_WINDOW = 30 * 60;                         // 골든아워 = 30분(초)
   const esRef = useRef<BotEventStream | null>(null);
   const jobRef = useRef<string>("");
@@ -325,11 +326,13 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
   function start() {
     if (running) return;
     // 🎯 대상 영상 큐: 채널에서 선택한 게 있으면 그걸 순차, 없으면 단일 URL(기존 동작)
-    const chosen: { url: string; type: "shorts" | "longform" }[] =
+    // 🔥 golden = 업로드 30분 이내(isGolden) → 골든아워 곡선. 오래된 영상 = 그냥 쇼츠 조회.
+    //   단일 URL 직접입력은 업로드시각을 몰라 골든 판정 불가 → 조회 시딩(golden:false).
+    const chosen: { url: string; type: "shorts" | "longform"; golden: boolean }[] =
       (isYt && selectedIds.size > 0)
-        ? sortedVideos.filter((v) => selectedIds.has(v.videoId)).map((v) => ({ url: v.url, type: v.type }))
+        ? sortedVideos.filter((v) => selectedIds.has(v.videoId)).map((v) => ({ url: v.url, type: v.type, golden: isGolden(v) }))
         : videoUrl.trim()
-          ? [{ url: videoUrl.trim(), type: (contentType === "longform" ? "longform" : "shorts") }]
+          ? [{ url: videoUrl.trim(), type: (contentType === "longform" ? "longform" : "shorts"), golden: false }]
           : [];
     if (!chosen.length) { showToast?.(isYt ? "영상을 선택하거나 URL을 입력하세요" : "URL을 입력하세요", "error"); return; }
     const picked = defs.filter((d) => actions[d.id]?.on && actions[d.id].qty > 0);
@@ -348,7 +351,7 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
     // ── 디테일 로그(1~N) — 트래픽처럼 단계별로 상세하게 ──
     pushLog("sys", `▶️ 시딩 시작 — ${isYt ? "유튜브" : "인스타"} · 대상 ${chosen.length}개 영상`);
     if (chosen.length === 1) pushLog("log", `🌐 대상 URL: ${chosen[0].url}`);
-    else pushLog("log", `🌐 선택한 ${chosen.length}개 영상을 순차 시딩(영상마다 골든아워 곡선)`);
+    else pushLog("log", `🌐 선택한 ${chosen.length}개 영상을 순차 시딩(🔥골든아워=30분 곡선 / 오래된 영상=쇼츠 조회)`);
     pushLog("log", `🧭 게이트웨이: ${gateway === "instagram" ? "인스타 referrer" : gateway === "facebook" ? "페북 referrer" : "직접"} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
@@ -365,7 +368,9 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
     // 조회(view)만 실제 봇 연동(STEP1). 나머지는 계정 붙는대로 순차 연결.
     if (actions["view"]?.on && actions["view"].qty > 0) {
       const total = actions["view"].qty;
-      pushLog("sys", `⏱️ 골든아워 스케줄러 시작 — 영상당 조회 ${total}회를 30분 자연 성장곡선(초반 집중→테이퍼링)으로 시딩${chosen.length > 1 ? ` · 총 ${chosen.length}개 순차` : ""}`);
+      const goldenN = chosen.filter((c) => c.golden).length;
+      const plainN = chosen.length - goldenN;
+      pushLog("sys", `⏱️ 시딩 시작 — 영상당 조회 ${total}회${goldenN ? ` · 🔥골든아워 ${goldenN}개(30분 곡선)` : ""}${plainN ? ` · 📺오래된 ${plainN}개(쇼츠 조회)` : ""}${chosen.length > 1 ? ` · 총 ${chosen.length}개 순차` : ""}`);
       if (viewLimit > 0) pushLog("log", `📊 오늘 사용 ${usedToday.toLocaleString()}/${viewLimit.toLocaleString()}회 · 남음 ${remainQuota.toLocaleString()}회 (한도 도달 시 자동 안내)`);
       runQueue(chosen, total, jobId);
     } else {
@@ -377,7 +382,7 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
   }
 
   // 🎬 영상 큐 — 선택한 영상들을 하나씩(순차) 골든아워 곡선으로 시딩(안전·티 덜 남)
-  function runQueue(queue: { url: string; type: "shorts" | "longform" }[], perVideoTotal: number, jobId: string) {
+  function runQueue(queue: { url: string; type: "shorts" | "longform"; golden: boolean }[], perVideoTotal: number, jobId: string) {
     setQueueTotal(queue.length);
     let vi = 0;
     const runVideo = () => {
@@ -388,10 +393,13 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
       }
       const cur = queue[vi];
       setQueueIdx(vi + 1);
-      setGhTarget(perVideoTotal); setGhDone(0); setGhElapsed(0);
+      setGhTarget(perVideoTotal); setGhDone(0); setGhElapsed(0); setGhGolden(cur.golden);
       schedRef.current = { stop: false, timer: null, started: Date.now() };
-      if (queue.length > 1) pushLog("sys", `━━━ 영상 ${vi + 1}/${queue.length} 시작 — ${cur.url} ━━━`);
-      runGoldenHour(cur, perVideoTotal, jobId + "_v" + vi, () => { vi += 1; runVideo(); });
+      if (queue.length > 1) pushLog("sys", `━━━ 영상 ${vi + 1}/${queue.length} (${cur.golden ? "🔥골든아워 30분 곡선" : "📺 쇼츠 조회"}) 시작 — ${cur.url} ━━━`);
+      const onDone = () => { vi += 1; runVideo(); };
+      // 🔥 골든아워(업로드30분내)=30분 자연곡선, 오래된 영상=곡선 없이 일반 조회 시딩
+      if (cur.golden) runGoldenHour(cur, perVideoTotal, jobId + "_v" + vi, onDone);
+      else runPlainViews(cur, perVideoTotal, jobId + "_v" + vi, onDone);
     };
     runVideo();
   }
@@ -430,6 +438,31 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
         pushLog("sys", `▶️ ${idx + 1}번째 시작 · 목표 ${total} · 완료 ${done} · 남음 ${total - done}`);
         runOneView(video, jobId + "_" + idx, () => { done += 1; setGhDone(done); runNext(); });
       }, waitMs);
+    };
+    runNext();
+  }
+
+  // 📺 오래된 영상(골든아워 지남) — 30분 곡선 없이 일반 쇼츠 조회 시딩. 한 조회 끝나면 자연스러운 랜덤 간격 후 다음.
+  //   (골든아워는 '방금 올린 30분'에 velocity를 몰아주는 것. 지난 영상은 그냥 조회수만 자연스럽게 올린다.)
+  function runPlainViews(video: { url: string; type: "shorts" | "longform" }, total: number, jobId: string, onVideoDone: () => void) {
+    let done = 0;
+    const runNext = () => {
+      if (schedRef.current.stop) { setRunning(false); return; }
+      if (viewLimit > 0 && usedTodayRef.current >= viewLimit) {
+        pushLog("err", `🛑 오늘 조회 한도(${viewLimit.toLocaleString()}회) 도달 — 시딩을 멈춰요. 자정 초기화 또는 등급 상향 후 이어서 하세요.`);
+        schedRef.current.stop = true; setRunning(false); return;
+      }
+      if (done >= total) {
+        pushLog("ok", `${queueTotal > 1 ? "  " : ""}✅ 이 영상 조회 시딩 완료 — 조회 ${done}회`);
+        onVideoDone(); return;
+      }
+      const idx = done;
+      pushLog("sys", `▶️ ${idx + 1}번째 조회 · 목표 ${total} · 완료 ${done} · 남음 ${total - done}`);
+      runOneView(video, jobId + "_" + idx, () => {
+        done += 1; setGhDone(done);
+        const wait = 6000 + Math.floor(Math.random() * 14000);   // 6~20초 랜덤(자연스럽게, 곡선 아님)
+        schedRef.current.timer = setTimeout(runNext, wait);
+      });
     };
     runNext();
   }
@@ -676,20 +709,22 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
         const qtyPct = Math.min(100, Math.round((ghDone / ghTarget) * 100));
         const timePct = Math.min(100, Math.round((ghElapsed / GH_WINDOW) * 100));
         return (
-          <div style={{ background: `linear-gradient(140deg,${T.panel2},${T.panel})`, border: `1px solid ${T.gold}`, borderRadius: 14, padding: "13px 15px", marginBottom: 14 }}>
+          <div style={{ background: `linear-gradient(140deg,${T.panel2},${T.panel})`, border: `1px solid ${ghGolden ? T.gold : T.line}`, borderRadius: 14, padding: "13px 15px", marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 9, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12.5, fontWeight: 800, color: T.gold }}>⏱️ 골든아워 진행 중{queueTotal > 1 ? ` · 영상 ${queueIdx}/${queueTotal}` : ""}</span>
-              <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>조회 {ghDone}/{ghTarget}회 · 초반 집중→테이퍼링</span>
-              <span style={{ marginLeft: "auto", fontFamily: F_MONO, fontSize: 13, fontWeight: 800, color: T.ink }}>남은 {mm}:{ss}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 800, color: ghGolden ? T.gold : T.ink }}>{ghGolden ? "⏱️ 골든아워 진행 중" : "📺 쇼츠 조회 시딩 중"}{queueTotal > 1 ? ` · 영상 ${queueIdx}/${queueTotal}` : ""}</span>
+              <span style={{ fontSize: 11.5, color: T.sub, fontWeight: 700 }}>조회 {ghDone}/{ghTarget}회{ghGolden ? " · 초반 집중→테이퍼링" : " · 오래된 영상(골든아워 지남)"}</span>
+              {ghGolden && <span style={{ marginLeft: "auto", fontFamily: F_MONO, fontSize: 13, fontWeight: 800, color: T.ink }}>남은 {mm}:{ss}</span>}
             </div>
             {/* 물량 진행바 */}
-            <div style={{ height: 8, borderRadius: 99, background: T.line, overflow: "hidden", marginBottom: 6 }}>
-              <div style={{ height: "100%", width: `${qtyPct}%`, borderRadius: 99, background: `linear-gradient(90deg,${T.gold},${T.goldDim})`, transition: "width .4s" }} />
+            <div style={{ height: 8, borderRadius: 99, background: T.line, overflow: "hidden", marginBottom: ghGolden ? 6 : 0 }}>
+              <div style={{ height: "100%", width: `${qtyPct}%`, borderRadius: 99, background: ghGolden ? `linear-gradient(90deg,${T.gold},${T.goldDim})` : "#7dd88a", transition: "width .4s" }} />
             </div>
-            {/* 시간 진행바(30분) */}
-            <div style={{ height: 4, borderRadius: 99, background: T.line, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${timePct}%`, borderRadius: 99, background: "#7dd88a", transition: "width 1s linear" }} />
-            </div>
+            {/* 시간 진행바(30분) — 골든아워일 때만 */}
+            {ghGolden && (
+              <div style={{ height: 4, borderRadius: 99, background: T.line, overflow: "hidden" }}>
+                <div style={{ height: "100%", width: `${timePct}%`, borderRadius: 99, background: "#7dd88a", transition: "width 1s linear" }} />
+              </div>
+            )}
           </div>
         );
       })()}
