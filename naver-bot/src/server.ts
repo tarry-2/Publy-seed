@@ -62,6 +62,10 @@ app.use(express.json({ limit: "50mb" })); // base64 이미지 포함 발행 대�
 app.use((req, res, next) => {
   if (!AUTH_TOKEN) return next(); // standalone local development fallback
   if (req.get("Authorization") === `Bearer ${AUTH_TOKEN}`) return next();
+  // 🌱 골든시드 관리자(public/admin)는 앱 내 iframe(http://localhost:5173)에서 봇을 부른다.
+  //   렌더러가 아니라 웹 문서라 preload 토큰을 못 실음 → 로컬 origin(5173)만 토큰 면제(CORS로 이미 그 origin만 허용).
+  const origin = req.get("Origin") || "";
+  if (/^https?:\/\/(localhost|127\.0\.0\.1):5173$/.test(origin)) return next();
   res.status(401).json({ error: "Unauthorized" });
 });
 

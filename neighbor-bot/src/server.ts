@@ -15,6 +15,9 @@ app.use(express.json({ limit: "50mb" }));
 app.use((req, res, next) => {
   if (!AUTH_TOKEN) return next();
   if (req.get("Authorization") === `Bearer ${AUTH_TOKEN}`) return next();
+  // 🌱 골든시드 관리자 iframe(localhost:5173)은 토큰 못 실음 → 로컬 origin만 면제(CORS로 이미 그 origin만 허용)
+  const origin = req.get("Origin") || "";
+  if (/^https?:\/\/(localhost|127\.0\.0\.1):5173$/.test(origin)) return next();
   res.status(401).json({ error: "Unauthorized" });
 });
 

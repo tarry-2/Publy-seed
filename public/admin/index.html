@@ -230,10 +230,15 @@
                 <button class="btn gold sm" id="twGen">✨ 글 생성</button>
               </div>
               <div id="twRecs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
-              <div id="twPreview" style="display:none;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)">
-                <div id="twTitle" style="font-weight:800;font-size:14px;margin-bottom:8px"></div>
-                <div id="twBody" style="font-size:12px;color:var(--sub);line-height:1.7;white-space:pre-wrap;max-height:280px;overflow-y:auto"></div>
-                <div id="twTags" style="margin-top:8px;font-size:11px;color:var(--gold);font-weight:700"></div>
+              <!-- 📝 글이 생성되는 자리(항상 표시) — 처음엔 안내, 생성 중엔 로딩, 완료 시 글 -->
+              <div id="twPreview" style="border:1.5px dashed var(--line2);border-radius:10px;padding:14px;background:var(--panel);min-height:520px;display:flex;flex-direction:column">
+                <div id="twPreviewEmpty" style="color:var(--sub);font-size:12px;text-align:center;line-height:1.7;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"><div>✍️ 여기에 <b>생성된 글</b>이 나타나요.<br>위에 키워드를 넣고 <b style="color:var(--gold)">✨ 글 생성</b>을 누르세요.</div></div>
+                <div id="twPreviewLoading" style="display:none;color:var(--gold);font-size:12.5px;text-align:center;font-weight:700;flex:1;align-items:center;justify-content:center">✍️ 글을 생성하는 중이에요… (제목 → 본문 순서로 만들어요)</div>
+                <div id="twPreviewDone" style="display:none;flex:1;flex-direction:column;min-height:0">
+                  <div id="twTitle" style="font-weight:800;font-size:14px;margin-bottom:8px"></div>
+                  <div id="twBody" style="font-size:12px;color:var(--sub);line-height:1.7;white-space:pre-wrap;flex:1;overflow-y:auto;min-height:0"></div>
+                  <div id="twTags" style="margin-top:8px;font-size:11px;color:var(--gold);font-weight:700"></div>
+                </div>
               </div>
             </div>
           </div>
@@ -1136,12 +1141,21 @@
   };
 
   // ── 글 생성(1회) ──
+  function twPreviewState(s){ // 'empty' | 'loading' | 'done'
+    $('twPreviewEmpty').style.display=s==='empty'?'flex':'none';
+    $('twPreviewLoading').style.display=s==='loading'?'flex':'none';
+    $('twPreviewDone').style.display=s==='done'?'flex':'none';
+    $('twPreview').style.borderStyle=s==='done'?'solid':'dashed';
+  }
   $('twGen').onclick=async()=>{
     const kw=$('twKw').value.trim(); if(!kw){ alert('주제 키워드를 넣어주세요'); return; }
     const btn=$('twGen'); btn.disabled=true; btn.textContent='✍️ 생성 중…';
+    twPreviewState('loading');
     try{
+      $('twPreviewLoading').textContent='✍️ 제목을 만드는 중이에요…';
       const tText=await callAI('네이버 블로그 SEO 제목 10개를 JSON 배열로만. 키워드 "'+kw+'"를 앞부분에 포함, 20~35자, 과장·낚시 금지.\nJSON 배열만.');
       const title=(parseArr(tText).filter(Boolean)[0])||kw;
+      $('twPreviewLoading').textContent='✍️ "'+title+'" 본문을 쓰는 중이에요…';
       const bText=await callAI('당신은 블로그 작가입니다. 키워드 "'+kw+'" 제목 "'+title+'"로 1500자 내외 본문을 써요.\n규칙: 마크다운(## ** *) 금지, 한자·영어단어 금지, 사람 말투(~해요/~거든요), 키워드를 5~6번 반복, 4~6개 소제목(## 없이), 단락 사이 빈 줄.\n출력 형식:\n태그: 태그1, 태그2, 태그3\n\n(본문)');
       const cleaned=stripMd(bText);
       const tagM=cleaned.match(/태그[:\s]*([^\n]+)/);
@@ -1151,8 +1165,8 @@
       $('twTitle').textContent=title;
       $('twBody').textContent=body;
       $('twTags').textContent=twPost.tags?twPost.tags.split(',').map(t=>'#'+t.replace('#','').trim()).join(' '):'';
-      $('twPreview').style.display='block';
-    }catch(e){ alert('글 생성 실패: '+e.message); }
+      twPreviewState('done');
+    }catch(e){ alert('글 생성 실패: '+e.message); twPreviewState('empty'); }
     btn.disabled=false; btn.textContent='✨ 글 생성';
   };
 

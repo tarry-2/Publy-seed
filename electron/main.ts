@@ -153,7 +153,11 @@ async function forkBotServer(opts: {
     return;
   }
 
-  const env = botEnvironment({ PLAYWRIGHT_BROWSERS_PATH: opts.chromiumPath, ...(opts.extraEnv || {}) });
+  // ★dev(패키징 안 됨)에선 번들 chromium 폴더가 없다 → PLAYWRIGHT_BROWSERS_PATH를 주지 않아
+  //   playwright가 시스템 캐시(~/Library/Caches/ms-playwright)의 크롬을 자동으로 쓰게 한다.
+  //   패키징된 앱에서만 번들 chromium 경로(opts.chromiumPath)를 준다.
+  const chromiumEnv = (isDev || !fs.existsSync(opts.chromiumPath)) ? {} : { PLAYWRIGHT_BROWSERS_PATH: opts.chromiumPath };
+  const env = botEnvironment({ ...chromiumEnv, ...(opts.extraEnv || {}) });
 
   // 짧게 뜬 뒤 죽는 프로세스는 성공 기동이 아니다. 일정 시간 생존해야 백오프를 리셋한다.
   let restartAttempts = 0;
