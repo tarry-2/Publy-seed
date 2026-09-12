@@ -341,7 +341,7 @@ async function startBotServer() {
     name: "bot",
     botPath: resourceDir("naver-bot"),
     chromiumPath: resourceDir("chromium"),
-    port: 3363,
+    port: 3368,   // 🌱 골든시드 발행봇 — 트래픽 naver(3363)와 분리(3앱 동시 실행)
     getProc: () => botProcess,
     setProc: p => { botProcess = p; },
   });
@@ -352,7 +352,7 @@ async function startNeighborBotServer() {
     name: "neighbor-bot",
     botPath: resourceDir("neighbor-bot"),
     chromiumPath: resourceDir("chromium"),
-    port: 3364,
+    port: 3369,   // 🌱 골든시드 품앗이·서이추봇 — 트래픽 neighbor(3364)와 분리
     // playwright는 naver-bot node_modules 공유
     extraEnv: { NODE_PATH: path.join(resourceDir("naver-bot"), "node_modules") },
     getProc: () => neighborBotProcess,
@@ -394,7 +394,7 @@ async function startBacklinkBotServer() {
     name: "backlink-bot",
     botPath: resourceDir("backlink-bot"),
     chromiumPath: resourceDir("chromium"),
-    port: 3374,
+    port: 3375,   // 🌱 골든시드 백링크봇 — 트래픽 backlink(3374)와 분리
     extraEnv: { NODE_PATH: path.join(resourceDir("naver-bot"), "node_modules") },
     getProc: () => backlinkBotProcess,
     setProc: p => { backlinkBotProcess = p; },
@@ -505,10 +505,10 @@ function shutdownBots(): Promise<void> {
   app.isQuitting = true;
   for (const bot of botRegistry) bot.cancelScheduledRestart();
   shutdownPromise = Promise.all([
-    killPort(3363, botProcess),
-    killPort(3364, neighborBotProcess),
-    killPort(3365, instaBotProcess),
-    killPort(3374, backlinkBotProcess),   // 🔗 백링크 봇도 종료 시 정리 — 안 하면 좀비로 3374 물고 남아 재시작해도 옛 봇(오류) 유지됨
+    killPort(3368, botProcess),           // 🌱 골든시드 전용 포트만 정리(트래픽 봇 안 죽이게)
+    killPort(3369, neighborBotProcess),
+    killPort(3367, instaBotProcess),
+    killPort(3375, backlinkBotProcess),   // 🔗 백링크 봇도 종료 시 정리(골든시드 전용 3375)
   ]).then(() => undefined);
   return shutdownPromise;
 }
@@ -530,14 +530,14 @@ app.on("before-quit", event => {
 
 ipcMain.handle("get-bot-status", async () => {
   try {
-    const res = await fetch("http://127.0.0.1:3363/health", { headers: { Authorization: `Bearer ${botAuthToken}` }, signal: AbortSignal.timeout(2000) });
+    const res = await fetch("http://127.0.0.1:3368/health", { headers: { Authorization: `Bearer ${botAuthToken}` }, signal: AbortSignal.timeout(2000) });
     return res.ok ? "online" : "offline";
   } catch { return "offline"; }
 });
 
 // 봇 3종 개별 상태(발행/이웃/인스타). 탭별로 정확한 온·오프라인 표시용.
 ipcMain.handle("get-all-bot-status", async () => {
-  const ports = { publish: 3363, neighbor: 3364, insta: 3365 };
+  const ports = { publish: 3368, neighbor: 3369, insta: 3367 };
   const out: Record<string, "online" | "offline"> = {};
   await Promise.all(Object.entries(ports).map(async ([k, p]) => {
     out[k] = (await pingBot(p)) ? "online" : "offline";

@@ -366,7 +366,7 @@
                   <label style="display:flex;align-items:center;gap:5px;font-size:12px"><input type="checkbox" id="twWarmComment"> 💬 댓글</label>
                 </div>
                 <button class="btn gold sm" id="twWarmRun" style="width:100%">🔥 선택 계정 워밍업 시작 (<span id="twWarmCount">0</span>개)</button>
-                <div class="muted" style="font-size:10.5px;margin-top:6px">※ 진행은 📋 발행 로그에. neighbor-bot(3364) 필요(앱 실행 시 자동).</div>
+                <div class="muted" style="font-size:10.5px;margin-top:6px">※ 진행은 📋 발행 로그에. neighbor-bot(3369) 필요(앱 실행 시 자동).</div>
               </div>
             </div>
 
@@ -828,7 +828,7 @@
   // ══════════════════════════════════════════════════════════
   //  🚀 컨트롤타워 — 계정 골라 → 글 생성 → 순차 발행
   // ══════════════════════════════════════════════════════════
-  const BOT='http://localhost:3363';               // 앱의 발행봇(naver-bot)
+  const BOT='http://localhost:3368';               // 앱의 발행봇(naver-bot)
   const GEMINI_MODELS=['gemini-2.0-flash','gemini-2.5-flash','gemini-1.5-flash'];
   let twRows=[];                                    // 컨트롤타워 계정 목록
   let twSel=new Set();                              // 선택된 계정 id
@@ -930,7 +930,7 @@
   };
 
   // ── 🔥 워밍업(품앗이 SSE, neighbor-bot 3364) ──
-  const NBOT='http://localhost:3364';
+  const NBOT='http://localhost:3369';
   $('twWarmRun').onclick=async()=>{
     const queue=twSelectedRows();
     if(queue.length<2){ alert('워밍업(품앗이)은 계정 2개 이상 선택해야 해요'); return; }
@@ -942,7 +942,7 @@
     try{
       const accounts=queue.map(a=>({accountId:'gs_'+a.id,blogId:a.blog_name||a.login,posts:2,receiveLimit:2}));
       const res=await fetch(NBOT+'/api/pumasi',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({accounts,doLike,doComment,delayMin:8,delayMax:15})});
-      if(!res.ok||!res.body){ twPush('❌ 워밍업 시작 실패(HTTP '+res.status+') — neighbor-bot(3364) 실행 확인',C.err); b.disabled=false; return; }
+      if(!res.ok||!res.body){ twPush('❌ 워밍업 시작 실패(HTTP '+res.status+') — neighbor-bot(3369) 실행 확인',C.err); b.disabled=false; return; }
       const reader=res.body.getReader(), dec=new TextDecoder(); let buf='';
       while(true){ const {done,value}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
         const parts=buf.split('\n\n'); buf=parts.pop()||'';
