@@ -152,11 +152,6 @@ export default function AdminLoginPage({ onAdminAuth, onBack, theme, onThemeTogg
       <div className={`admin-root ${theme}`}>
         <div className="admin-grid"/>
 
-        {/* 뒤로가기 */}
-        <button className="back-btn" onClick={onBack}>
-          ← 일반 로그인
-        </button>
-
         {/* 테마 */}
         <div className="top-btns">
           <button className="icon-btn" onClick={onThemeToggle}>

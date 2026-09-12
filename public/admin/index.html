@@ -10,7 +10,7 @@
 <style>
   /* 다크(기본) — 기존보다 한 톤 밝게 */
   :root, :root.dark{
-    --bg:#14121a; --panel:#201c2b; --panel2:#2a2539; --line:#39334a; --line2:#4a4360;
+    --bg:#221f2b; --panel:#2c2838; --panel2:#363042; --line:#453e56; --line2:#544c68;
     --ink:#f6f1e6; --sub:#b0a894; --gold:#f7cd63; --gold2:#d4ad4a; --glow:rgba(247,205,99,.16);
     --good:#7dd88a; --warn:#f7cd63; --danger:#ff8a8a;
     --bgimg:radial-gradient(900px 500px at 12% -8%,#2a2110 0,transparent 55%),radial-gradient(700px 460px at 108% 6%,#221836 0,transparent 50%);
@@ -29,19 +29,28 @@
   .wrap{max-width:920px;margin:0 auto;padding:16px 14px 60px;}
   .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin-bottom:14px;}
   .sect{font-size:13px;font-weight:800;color:var(--gold);margin-bottom:10px;display:flex;align-items:center;gap:7px;}
+  /* 🔴 모든 버튼·칩 인터랙션 필수(테리 매번 지적, 절대 목업 금지): hover lift+glow, active 눌림 */
   .btn{padding:9px 15px;border-radius:10px;border:1.5px solid var(--line2);background:var(--panel2);color:var(--ink);
-    font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap;}
-  .btn:hover{border-color:var(--gold);}
+    font-weight:800;font-size:13px;cursor:pointer;font-family:inherit;transition:transform .1s,box-shadow .15s,border-color .15s,background .15s;white-space:nowrap;}
+  .btn:hover:not(:disabled){border-color:var(--gold);transform:translateY(-1px);box-shadow:0 4px 12px var(--glow);}
+  .btn:active:not(:disabled){transform:translateY(0) scale(.96);box-shadow:none;}
+  .btn:disabled{opacity:.45;cursor:not-allowed;}
   .btn.gold{background:linear-gradient(135deg,var(--gold),var(--gold2));color:#231a08;border:none;}
+  .btn.gold:hover:not(:disabled){box-shadow:0 6px 18px var(--glow);}
   .btn.danger{color:var(--danger);border-color:rgba(255,122,122,.4);}
+  .btn.danger:hover:not(:disabled){border-color:var(--danger);box-shadow:0 4px 12px rgba(255,122,122,.25);}
   .btn.good{color:var(--good);border-color:rgba(125,216,138,.4);}
   .btn.sm{padding:6px 11px;font-size:12px;}
   input{width:100%;padding:13px 15px;border:1px solid var(--line2);border-radius:11px;background:var(--panel2);color:var(--ink);
     font-size:15px;font-family:inherit;outline:none;}
   input:focus{border-color:var(--gold);}
+  /* 체크박스는 전역 input 스타일(width:100%) 제외 — 안 그러면 카드 레이아웃 깨짐 */
+  input[type=checkbox]{width:auto;padding:0;border-radius:3px;flex-shrink:0;accent-color:var(--gold);cursor:pointer;}
   .chip{display:inline-flex;align-items:center;gap:4px;padding:6px 11px;border-radius:99px;border:1.5px solid var(--line2);
-    background:var(--panel2);color:var(--sub);font-size:12px;font-weight:800;cursor:pointer;transition:all .12s;}
-  .chip.on{background:var(--gold);color:#231a08;border-color:var(--gold);}
+    background:var(--panel2);color:var(--sub);font-size:12px;font-weight:800;cursor:pointer;transition:transform .1s,box-shadow .15s,border-color .15s,background .15s;}
+  .chip:hover{border-color:var(--gold);transform:translateY(-1px);}
+  .chip:active{transform:scale(.94);}
+  .chip.on{background:var(--gold);color:#231a08;border-color:var(--gold);box-shadow:0 3px 10px var(--glow);}
   .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--bg) 70%,transparent);padding:10px 0;}
   .tab{flex:1;min-width:90px;padding:11px;border-radius:11px;border:1px solid var(--line);background:var(--panel);
     color:var(--sub);font-weight:800;font-size:13px;cursor:pointer;text-align:center;position:relative;}
@@ -49,6 +58,13 @@
   .badge{position:absolute;top:-5px;right:-3px;background:var(--danger);color:#fff;border-radius:99px;padding:1px 7px;font-size:10px;font-weight:900;}
   .row{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:13px 14px;margin-bottom:9px;}
   .muted{color:var(--sub);font-size:12px;font-weight:600;}
+  /* 🚀 컨트롤타워 2단 레이아웃(원터치처럼 넓게) — 창 좁아도 최대한 2단 유지(720px) */
+  .tw-grid{display:grid;grid-template-columns:1fr 400px;gap:16px;align-items:start;}
+  .tw-panel{background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:14px;margin-bottom:14px;}
+  .tw-panel-h{font-size:13px;font-weight:800;margin-bottom:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .tw-sticky{position:sticky;top:8px;}
+  .tw-fold{cursor:pointer;} .tw-fold-tag{font-size:10.5px;color:var(--sub);font-weight:700;margin-left:auto;background:var(--panel);padding:2px 8px;border-radius:99px;border:1px solid var(--line);}
+  @media(max-width:720px){ .tw-grid{grid-template-columns:1fr;} .tw-sticky{position:static;} }
   .pill{display:inline-block;padding:3px 9px;border-radius:99px;font-size:11px;font-weight:900;}
   /* 로그인 게이트 */
   #gate{position:fixed;inset:0;z-index:100;display:flex;align-items:center;justify-content:center;padding:22px;
@@ -93,6 +109,7 @@
       <div class="tab on" data-pane="requests" id="tabReq">🔔 주문승인<span class="badge" id="reqBadge" style="display:none">0</span></div>
       <div class="tab" data-pane="members">👥 회원관리</div>
       <div class="tab" data-pane="issue">🎫 발급·연장</div>
+      <div class="tab" data-pane="seed">🌱 계정농사</div>
     </div>
 
     <!-- 🔔 주문승인 -->
@@ -142,6 +159,325 @@
         <button class="btn gold" id="issBtn" style="width:100%;padding:13px">🎫 발급 · 연장하기</button>
         <div id="issMsg" style="font-size:12.5px;font-weight:700;margin-top:10px;min-height:15px"></div>
       </div>
+    </div>
+
+    <!-- 🌱 계정농사 -->
+    <div class="pane" id="pane-seed" style="display:none">
+
+      <!-- 🚀 컨트롤타워: 계정 골라 → 글 생성 → 순차 발행 -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="sect">🚀 컨트롤타워 <span class="muted" style="font-weight:600;font-size:12px">— 계정 골라 글 1개 만들어 순서대로 발행</span></div>
+        <div class="muted" style="margin-bottom:14px">육성한 계정을 여러 개 골라 → 키워드로 글·이미지를 <b>1번만</b> 생성 → 고른 계정에 <b>순서대로 자동 발행</b>해요. 똑같은 글을 여러 계정에 뿌려 검색지면을 장악합니다.</div>
+
+        <div class="tw-grid">
+          <!-- ═══ 왼쪽: 계정 선택 + 글 생성 ═══ -->
+          <div>
+            <!-- ① 계정 선택 (수천 개 관점: 검색+필터+조건선택+표) -->
+            <div class="tw-panel">
+              <div class="tw-panel-h">① 발행할 계정 선택
+                <span class="pill" style="background:var(--glow);color:var(--gold)"><span id="twSelCount">0</span>개 선택</span>
+                <span class="muted" style="font-weight:600">/ <span id="twShownCount">0</span>개 표시 / 전체 <span id="twTotalCount">0</span></span>
+                <button class="btn sm" id="twReload" style="margin-left:auto">🔄</button>
+              </div>
+              <!-- 검색 + 상태필터 -->
+              <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+                <input id="twSearch" placeholder="🔍 아이디·블로그명·키워드 검색" style="flex:1;min-width:160px;font-size:12px;padding:8px 11px" />
+                <select id="twStatusFilter" style="padding:8px 10px;font-size:12px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink)">
+                  <option value="">전체 상태</option>
+                  <option value="ready">준비완료</option>
+                  <option value="active">투입중</option>
+                  <option value="warming">워밍업</option>
+                  <option value="profiled">프로필</option>
+                  <option value="created">생성됨</option>
+                  <option value="resting">휴식</option>
+                  <option value="banned">밴</option>
+                </select>
+                <select id="twSort" style="padding:8px 10px;font-size:12px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink)">
+                  <option value="new">최신순</option>
+                  <option value="old">오래된순</option>
+                </select>
+              </div>
+              <!-- 조건 선택(수백개 한번에) -->
+              <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px;align-items:center">
+                <span class="muted" style="font-size:11px">빠른 선택:</span>
+                <button class="btn sm" id="twSelAllShown">표시된 전체</button>
+                <button class="btn sm" id="twSelTodayNone">오늘 미발행만</button>
+                <button class="btn sm" id="twSelReady">준비완료만</button>
+                <button class="btn sm" id="twSelNone">해제</button>
+                <span style="display:inline-flex;align-items:center;gap:4px">
+                  <input id="twSelNInput" type="number" min="1" placeholder="N" style="width:56px;font-size:12px;padding:6px 8px" />
+                  <button class="btn sm" id="twSelN">개만</button>
+                </span>
+              </div>
+              <!-- 컴팩트 표 -->
+              <div style="border:1px solid var(--line);border-radius:9px;overflow:hidden">
+                <div style="display:grid;grid-template-columns:30px 1fr 80px 60px 54px;gap:0;padding:7px 10px;background:var(--panel);font-size:11px;font-weight:800;color:var(--sub);border-bottom:1px solid var(--line)">
+                  <span><input type="checkbox" id="twHeadCheck" title="표시된 전체 선택" /></span>
+                  <span>계정</span><span>상태</span><span>누적</span><span>오늘</span>
+                </div>
+                <div id="twAccts" style="max-height:340px;overflow-y:auto"><div class="muted" style="padding:12px">불러오는 중…</div></div>
+              </div>
+              <!-- 페이지네이션 -->
+              <div id="twPager" style="display:flex;gap:6px;align-items:center;justify-content:center;margin-top:8px;flex-wrap:wrap"></div>
+            </div>
+
+            <!-- ② 글 생성 -->
+            <div class="tw-panel">
+              <div class="tw-panel-h">② 주제·글 생성 <span class="muted" style="font-weight:600">(1번만 만들어 모든 계정에 재사용)</span></div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+                <input id="twKw" placeholder="발행할 주제 키워드 (예: 온종일팜 제철과일)" style="flex:1;min-width:180px" />
+                <button class="btn sm" id="twRecommend">🔥 키워드 추천</button>
+                <button class="btn gold sm" id="twGen">✨ 글 생성</button>
+              </div>
+              <div id="twRecs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
+              <div id="twPreview" style="display:none;border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--panel)">
+                <div id="twTitle" style="font-weight:800;font-size:14px;margin-bottom:8px"></div>
+                <div id="twBody" style="font-size:12px;color:var(--sub);line-height:1.7;white-space:pre-wrap;max-height:280px;overflow-y:auto"></div>
+                <div id="twTags" style="margin-top:8px;font-size:11px;color:var(--gold);font-weight:700"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ═══ 오른쪽: 설정 패널 (sticky · 탭 그릇) ═══ -->
+          <div class="tw-sticky">
+            <!-- 🗂 설정 탭(앞으로 기능 담을 그릇): 발행/육성/예약/프록시/통계 -->
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;background:var(--panel);padding:5px;border-radius:11px;border:1px solid var(--line)">
+              <button class="chip on" data-twtab="publish" style="flex:1;justify-content:center;padding:8px 4px">🚀 발행</button>
+              <button class="chip" data-twtab="grow" style="flex:1;justify-content:center;padding:8px 4px">🌱 육성</button>
+              <button class="chip" data-twtab="sched" style="flex:1;justify-content:center;padding:8px 4px">⏰ 예약</button>
+              <button class="chip" data-twtab="proxy" style="flex:1;justify-content:center;padding:8px 4px">🌐 프록시</button>
+              <button class="chip" data-twtab="stat" style="flex:1;justify-content:center;padding:8px 4px">📊 통계</button>
+            </div>
+
+            <!-- ── 🚀 발행 탭 (현재 유일 완성) ── -->
+            <div class="tw-tabpane" data-twpane="publish">
+            <!-- 🔑 Gemini 키 (접기/펴기) -->
+            <div class="tw-panel">
+              <div class="tw-panel-h" id="twGemToggle" style="cursor:pointer;margin-bottom:0"><span id="twGemArrow">▶</span> 🔑 Gemini API 키 <span id="twGemState" class="muted" style="font-weight:600;margin-left:auto"></span> <span class="tw-fold-tag" id="twGemTag">▶ 펴기</span></div>
+              <div id="twGemBody" style="display:none;margin-top:10px">
+                <div class="muted" style="margin-bottom:8px;font-size:11px">글 생성에 필요 · aistudio.google.com/apikey (무료)</div>
+                <div style="display:flex;gap:6px;flex-wrap:wrap">
+                  <input id="twGemKey" type="password" placeholder="키 입력" style="flex:1;min-width:120px;font-size:13px;padding:9px 11px" />
+                  <button class="btn gold sm" id="twGemSave">💾</button>
+                </div>
+                <div id="twGemMsg" class="muted" style="font-size:11px;margin-top:5px"></div>
+              </div>
+            </div>
+
+            <!-- 💬 글쓴이 인사말 (접기/펴기) — 썸네일 아래 1회 자동 삽입 -->
+            <div class="tw-panel">
+              <div class="tw-panel-h" id="twGreetToggle" style="cursor:pointer;margin-bottom:0"><span id="twGreetArrow">▶</span> 💬 글쓴이 인사말 <span id="twGreetState" class="muted" style="font-weight:600;margin-left:auto"></span> <span class="tw-fold-tag" id="twGreetTag">▶ 펴기</span></div>
+              <div id="twGreetBody" style="display:none;margin-top:10px">
+                <div class="muted" style="margin-bottom:8px;font-size:11px">모든 계정 글의 <b>썸네일(첫 이미지) 바로 아래</b>에 1회 자동으로 들어가요(비우면 안 넣음).</div>
+                <textarea id="twGreet" rows="2" placeholder="안녕하세요! 오늘도 유용한 정보를 가지고 왔어요 😊" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:9px;border:1px solid var(--line2);background:var(--panel2);color:var(--ink);font-size:12.5px;font-family:inherit;resize:none"></textarea>
+              </div>
+            </div>
+
+            <!-- ③ 발행 설정 (여백 넉넉히, 칩 균등 분배로 빈공간 채움) -->
+            <div class="tw-panel">
+              <div class="tw-panel-h" style="margin-bottom:14px">③ 발행 설정</div>
+              <div class="muted" style="font-size:11.5px;margin-bottom:8px">⏳ 계정 간 텀(분)</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px" id="twTermChips">
+                <button class="chip" data-term="10" style="flex:1;justify-content:center;padding:9px 0">10</button>
+                <button class="chip on" data-term="30" style="flex:1;justify-content:center;padding:9px 0">30</button>
+                <button class="chip" data-term="60" style="flex:1;justify-content:center;padding:9px 0">60</button>
+                <button class="chip" data-term="120" style="flex:1;justify-content:center;padding:9px 0">120</button>
+              </div>
+              <div class="muted" style="font-size:11.5px;margin-bottom:8px">🖼️ 이미지 방식</div>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px" id="twImgChips">
+                <button class="chip on" data-img="flow" style="flex:1;justify-content:center;padding:9px 0">Flow(무료)</button>
+                <button class="chip" data-img="ai" style="flex:1;justify-content:center;padding:9px 0">AI</button>
+                <button class="chip" data-img="none" style="flex:1;justify-content:center;padding:9px 0">없음</button>
+              </div>
+              <div id="twImgCountWrap">
+                <div class="muted" style="font-size:11.5px;margin-bottom:8px">🔢 이미지 장수</div>
+                <div style="display:flex;gap:10px;flex-wrap:wrap" id="twImgCountChips">
+                  <button class="chip" data-imgc="1" style="flex:1;justify-content:center;padding:9px 0">1</button>
+                  <button class="chip" data-imgc="2" style="flex:1;justify-content:center;padding:9px 0">2</button>
+                  <button class="chip on" data-imgc="3" style="flex:1;justify-content:center;padding:9px 0">3</button>
+                  <button class="chip" data-imgc="4" style="flex:1;justify-content:center;padding:9px 0">4</button>
+                  <button class="chip" data-imgc="5" style="flex:1;justify-content:center;padding:9px 0">5</button>
+                  <button class="chip" data-imgc="6" style="flex:1;justify-content:center;padding:9px 0">6</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 🎬 Flow 계정 연결 (접기/펴기) -->
+            <div id="twFlowWrap" class="tw-panel">
+              <div class="tw-panel-h" id="twFlowToggle" style="cursor:pointer;margin-bottom:0"><span id="twFlowArrow">▶</span> 🎬 Flow 계정 연결 <span id="twFlowState" class="muted" style="font-weight:600;margin-left:auto"></span> <span class="tw-fold-tag" id="twFlowTag">▶ 펴기</span></div>
+              <div id="twFlowBody" style="display:none;margin-top:10px">
+                <div style="display:flex;gap:5px;margin-bottom:8px">
+                  <button class="btn sm" id="twFlowAddSlot">➕ 계정 추가</button>
+                  <button class="btn gold sm" id="twFlowConnectAll">🔗 전체 연결</button>
+                </div>
+                <div class="muted" style="font-size:11px;margin-bottom:8px">무료 이미지(구글 로그인 1회). 여러 개면 크레딧 소진 시 다음 계정 자동 전환</div>
+                <div id="twFlowSlots" style="display:flex;flex-direction:column;gap:6px"></div>
+              </div>
+            </div>
+
+            <!-- 🔗 온파트너·일반 링크 -->
+            <div class="tw-panel">
+              <div class="tw-panel-h">🔗 링크 삽입 <span class="muted" style="font-weight:600">(선택, 최대 3개)</span></div>
+              <div class="muted" style="font-size:11px;margin-bottom:6px">본문 끝에 카드로 들어가요. 온파트너 링크·일반 링크를 넣으세요.</div>
+              <div style="display:flex;gap:6px;margin-bottom:6px">
+                <input id="twPartnerInput" placeholder="🔗 온파트너 링크(https://…)" style="flex:1;min-width:100px;font-size:12px;padding:8px 10px" />
+                <button class="btn sm" id="twPartnerAdd">추가</button>
+              </div>
+              <div style="display:flex;gap:6px;margin-bottom:8px">
+                <input id="twLinkInput" placeholder="🌐 일반 링크(https://…)" style="flex:1;min-width:100px;font-size:12px;padding:8px 10px" />
+                <button class="btn sm" id="twLinkAdd">추가</button>
+              </div>
+              <div id="twLinks" style="display:flex;flex-direction:column;gap:5px"></div>
+            </div>
+
+            <!-- ④ 발행 제어 -->
+            <div class="tw-panel" style="border-color:var(--gold)">
+              <div class="tw-panel-h">④ 순차 발행
+                <span id="twStatus" class="pill" style="background:var(--line);color:var(--sub);margin-left:auto">⚪ 대기</span>
+              </div>
+              <div id="twProgress" class="muted" style="font-size:12px;margin-bottom:8px;min-height:14px"></div>
+              <!-- 🪟 창 보기 토글 -->
+              <button class="btn sm" id="twShowWindow" style="width:100%;margin-bottom:6px">🪟 창 보기 OFF</button>
+              <div id="twShowWindowDesc" class="muted" style="font-size:11px;line-height:1.5;margin-bottom:8px;padding:8px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--line)">🪟 <b>창 보기</b> — 켜면 봇이 <b>실제 크롬 창</b>을 띄워 로그인→글쓰기→발행 움직임을 직접 봐요. OFF면 창 없이 백그라운드로 조용히 돌고, <b>대신 로그에 진행 캡처</b>가 떠요. 지금 OFF.</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+                <button class="btn gold" id="twStart" style="grid-column:1/3">▶ 시작하기</button>
+                <button class="btn" id="twPause" disabled>⏸ 정지</button>
+                <button class="btn" id="twResume" disabled>⏭ 이어가기</button>
+                <button class="btn danger" id="twCancel" disabled style="grid-column:1/3">🛑 취소</button>
+              </div>
+            </div>
+            </div><!-- /🚀 발행 탭 -->
+
+            <!-- ── 🌱 육성 탭 (준비 중 그릇) ── -->
+            <div class="tw-tabpane" data-twpane="grow" style="display:none">
+              <div class="tw-panel">
+                <div class="tw-panel-h">🌱 계정 육성</div>
+                <div class="muted" style="font-size:12px;line-height:1.7">갓 만든 계정을 밴 없이 키우는 기능이 여기 들어와요.<br><br>
+                  • 프로필 자동 세팅(블로그명·소개·사진)<br>
+                  • 워밍업(이웃·공감·댓글로 활동이력)<br>
+                  • 서로이웃 맺기<br>
+                  • 계정 건강 체크(저품질·블럭·캡차 감지)<br><br>
+                  <span style="color:var(--gold);font-weight:700">🚧 다음 단계에서 제작</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── ⏰ 예약 탭 (준비 중) ── -->
+            <div class="tw-tabpane" data-twpane="sched" style="display:none">
+              <div class="tw-panel">
+                <div class="tw-panel-h">⏰ 예약 발행</div>
+                <div class="muted" style="font-size:12px;line-height:1.7">무인 자동 발행이 여기 들어와요.<br><br>
+                  • 매일 정해진 시간 자동 발행<br>
+                  • 키워드 세트 순환<br>
+                  • 글 다양화(계정마다 제목·본문 변형)<br><br>
+                  <span style="color:var(--gold);font-weight:700">🚧 다음 단계에서 제작</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── 🌐 프록시 탭 (준비 중) ── -->
+            <div class="tw-tabpane" data-twpane="proxy" style="display:none">
+              <div class="tw-panel">
+                <div class="tw-panel-h">🌐 프록시 배정</div>
+                <div class="muted" style="font-size:12px;line-height:1.7">계정마다 다른 IP로 연좌제 밴을 막아요.<br><br>
+                  • 계정↔프록시 배정<br>
+                  • IP 상태 점검<br><br>
+                  <span style="color:var(--gold);font-weight:700">🚧 다음 단계에서 제작</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- ── 📊 통계 탭 (준비 중) ── -->
+            <div class="tw-tabpane" data-twpane="stat" style="display:none">
+              <div class="tw-panel">
+                <div class="tw-panel-h">📊 통계</div>
+                <div class="muted" style="font-size:12px;line-height:1.7">전체 계정 상태를 한눈에.<br><br>
+                  • 계정별 발행 수·밴율<br>
+                  • 검색 노출 순위 측정<br>
+                  • 발행 이력<br><br>
+                  <span style="color:var(--gold);font-weight:700">🚧 다음 단계에서 제작</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🌱 계정농사 육성 계정풀 (접이식) -->
+      <div class="card">
+        <div class="sect" id="seedPoolToggle" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:0">
+          <span id="seedPoolArrow">▼</span> 🌱 계정농사 (육성 계정풀) <span class="muted" style="font-weight:600;font-size:12px;margin-left:auto">클릭해서 접기/펴기</span>
+        </div>
+        <div id="seedPoolBody" style="margin-top:12px">
+        <div class="muted" style="margin-bottom:10px">비실명 계정을 <b>육성</b>해서 브랜드키워드 검색지면을 장악해요(예: 네이버 "온종일팜" 검색 → 우리가 키운 블로그가 쭉 노출). 한 줄 = 육성 중인 블로그 계정 1개.</div>
+        <div id="seedKpi" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
+          <span class="muted">용도</span>
+          <button class="chip on" data-seedpurpose="brand_search">브랜드검색 점유</button>
+          <button class="chip" data-seedpurpose="seeding">골든아워 시딩</button>
+          <button class="chip" data-seedpurpose="backlink">백링크</button>
+          <button class="chip" data-seedpurpose="">전체</button>
+          <button class="btn gold sm" id="seedAddBtn" style="margin-left:auto">➕ 계정 등록</button>
+        </div>
+
+        <!-- 등록 폼 (접이식) -->
+        <div id="seedForm" class="row" style="display:none">
+          <div id="seedFormTitle" style="font-size:13px;font-weight:800;margin-bottom:10px">새 계정 등록</div>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">
+            <input id="sfLogin" placeholder="로그인 아이디 *" />
+            <input id="sfPassword" placeholder="비밀번호" />
+            <input id="sfPhone" placeholder="이 계정 만든 번호" />
+            <input id="sfKeyword" placeholder="타깃 키워드(예: 온종일팜)" />
+            <input id="sfBlogName" placeholder="블로그명" />
+            <input id="sfDisplayName" placeholder="별명(닉네임)" />
+          </div>
+          <!-- 🪪 프로필 육성: 빈 계정=봇티, 채워야 노출·생존 -->
+          <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
+            <div class="muted" style="margin-bottom:8px">🪪 블로그 프로필 (계정마다 다르게 채워야 봇티 안 나고 검색 노출·생존에 유리)</div>
+            <div style="display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap">
+              <img id="sfProfilePreview" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:var(--line);flex-shrink:0;display:none" />
+              <div style="flex:1;min-width:200px;display:flex;flex-direction:column;gap:8px">
+                <input id="sfProfileImage" placeholder="프로필 사진 URL (https://…)" />
+                <textarea id="sfBio" placeholder="소개글 (예: 산지직송 신선식품과 살림 팁을 기록해요 😊)" rows="2" style="resize:none;font-family:inherit"></textarea>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button class="btn gold sm" id="sfSave">저장</button>
+            <button class="btn sm" id="sfCancel">취소</button>
+            <span id="sfMsg" class="muted" style="align-self:center"></span>
+          </div>
+        </div>
+
+        <div id="seedList" style="margin-top:10px"><div class="muted">불러오는 중…</div></div>
+        </div><!-- /seedPoolBody -->
+      </div>
+
+      <!-- 📋 발행 로그 (맨 밑 · 세로로 크게) -->
+      <div class="card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <div class="sect" style="margin:0">📋 발행 로그 <span class="muted" style="font-weight:600;font-size:12px">— 발행 진행이 여기 실시간으로</span></div>
+          <button class="btn sm" id="twLogZoom" style="margin-left:auto">🔍 크게 보기</button>
+          <button class="btn sm" id="twCopyLog">📄 복사</button>
+        </div>
+        <div id="twLog" style="height:560px;overflow-y:auto;background:#17141f;border:1px solid var(--line);border-radius:10px;padding:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11.5px;line-height:1.5">
+          <div style="color:#6b7280;text-align:center;padding:12px">계정 선택 → 글 생성 → ▶ 시작하기<br>여기에 발행 진행 로그가 실시간으로 떠요.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 🔍 로그 크게 보기 모달 (트래픽식 · 캡처 이미지 포함) -->
+  <div id="twLogModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(10,7,19,.82);align-items:center;justify-content:center;padding:30px">
+    <div style="width:100%;max-width:1100px;height:88vh;background:#17141f;border-radius:16px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line2)">
+        <b style="color:#f4efe4;font-size:15px">📜 발행 로그 — 크게 보기</b>
+        <div style="display:flex;gap:8px">
+          <button class="btn sm" id="twCopyLog2">📄 복사</button>
+          <button class="btn gold sm" id="twLogClose">닫기</button>
+        </div>
+      </div>
+      <div id="twLogBig" style="flex:1;overflow-y:auto;padding:16px 20px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;line-height:1.8"></div>
     </div>
   </div>
 </div>
@@ -226,6 +562,7 @@
     $('pane-'+t.dataset.pane).style.display='block';
     if(t.dataset.pane==='requests') loadReq();
     if(t.dataset.pane==='members') loadMembers();
+    if(t.dataset.pane==='seed'){ loadSeed(); twLoad(); }
   });
 
   // ── 🔔 주문승인 ──
@@ -359,6 +696,515 @@
     $('issMsg').textContent='✅ 발급 완료 ('+rows.length+'개 플랫폼)'; $('issMsg').style.color='var(--good)';
     issSel.youtube.clear(); issSel.instagram.clear(); buildIssTools();
   };
+
+  // ── 🌱 계정농사 ──
+  const SEED_STATUS={created:['생성됨','#b0a894'],profiled:['프로필완료','#7aa2f7'],posted:['게시물완료','#7dcfff'],warming:['워밍업중','#f7cd63'],ready:['준비완료','#7dd88a'],active:['시딩투입','#f7cd63'],resting:['휴식','#bb9af7'],banned:['밴','#ff8a8a'],error:['실패','#ff8a8a']};
+  const SEED_NEXT={created:['profiled','banned'],profiled:['posted','banned'],posted:['warming','banned'],warming:['ready','resting','banned'],ready:['active','resting'],active:['resting','banned'],resting:['ready','active'],banned:[],error:['created']};
+  const PLAT_LABEL={naver:'네이버',youtube:'유튜브',instagram:'인스타',facebook:'페북'};
+  let seedPurpose='brand_search';
+  let seedEditId=null;   // 수정 중인 계정 id (없으면 신규 등록)
+  let seedRows=[];       // 현재 목록(수정 시 값 채우기용)
+
+  document.querySelectorAll('[data-seedpurpose]').forEach(c=>c.onclick=()=>{
+    document.querySelectorAll('[data-seedpurpose]').forEach(x=>x.classList.remove('on')); c.classList.add('on');
+    seedPurpose=c.dataset.seedpurpose; loadSeed();
+  });
+  function seedResetForm(){
+    seedEditId=null; $('seedFormTitle').textContent='새 계정 등록'; $('sfMsg').textContent='';
+    ['sfLogin','sfPassword','sfPhone','sfKeyword','sfBlogName','sfDisplayName','sfProfileImage','sfBio'].forEach(id=>$(id).value='');
+    seedSyncPreview();
+  }
+  // 프로필 사진 URL 미리보기(입력 즉시 반영)
+  function seedSyncPreview(){
+    const url=$('sfProfileImage').value.trim(); const img=$('sfProfilePreview');
+    if(url){ img.src=url; img.style.display='block'; } else { img.removeAttribute('src'); img.style.display='none'; }
+  }
+  $('sfProfileImage').addEventListener('input',seedSyncPreview);
+  $('seedAddBtn').onclick=()=>{ const f=$('seedForm'); const willShow=f.style.display==='none'; if(willShow) seedResetForm(); f.style.display=willShow?'block':'none'; };
+  $('sfCancel').onclick=()=>{ $('seedForm').style.display='none'; seedResetForm(); };
+  $('sfSave').onclick=async()=>{
+    const login=$('sfLogin').value.trim();
+    if(!login){ $('sfMsg').textContent='로그인 아이디는 필수'; $('sfMsg').style.color='var(--danger)'; return; }
+    const data={login,password:$('sfPassword').value.trim(),phone_used:$('sfPhone').value.trim(),
+      target_keyword:$('sfKeyword').value.trim(),blog_name:$('sfBlogName').value.trim(),
+      display_name:$('sfDisplayName').value.trim(),profile_image_url:$('sfProfileImage').value.trim(),bio:$('sfBio').value.trim()};
+    let error;
+    if(seedEditId){
+      ({error}=await sb.rpc('gs_seed_update',{p_token:TOKEN,p_id:seedEditId,p_data:data}));
+    }else{
+      data.platform='naver'; data.purpose=(seedPurpose||'brand_search'); data.source='bought';
+      ({error}=await sb.rpc('gs_seed_insert',{p_token:TOKEN,p_data:data}));
+    }
+    if(error){ $('sfMsg').textContent='실패: '+error.message; $('sfMsg').style.color='var(--danger)'; return; }
+    $('sfMsg').textContent=seedEditId?'✅ 수정 완료':'✅ 등록 완료'; $('sfMsg').style.color='var(--good)';
+    $('seedForm').style.display='none'; seedResetForm(); loadSeed();
+  };
+
+  async function loadSeed(){
+    if(!TOKEN)return;
+    const {data,error}=await sb.rpc('gs_seed_list',{p_token:TOKEN,p_purpose:seedPurpose||null,p_platform:null});
+    const box=$('seedList');
+    if(error){ box.innerHTML='<div class="muted">오류: '+error.message+'</div>'; return; }
+    const rows=(data||[]).slice().sort((a,b)=>new Date(a.created_at)-new Date(b.created_at)); seedRows=rows;
+    // KPI
+    const cnt=k=>rows.filter(r=>r.status===k).length;
+    const grow=cnt('created')+cnt('profiled')+cnt('posted')+cnt('warming');
+    $('seedKpi').innerHTML=
+      '<span class="pill" style="background:var(--line);color:var(--ink)">전체 '+rows.length+'</span>'+
+      '<span class="pill" style="background:#7dd88a22;color:#7dd88a">준비완료 '+cnt('ready')+'</span>'+
+      '<span class="pill" style="background:#f7cd6322;color:var(--gold)">투입중 '+cnt('active')+'</span>'+
+      '<span class="pill" style="background:#f7cd6322;color:var(--gold)">육성중 '+grow+'</span>'+
+      '<span class="pill" style="background:#ff8a8a22;color:#ff8a8a">밴 '+cnt('banned')+'</span>';
+    if(!rows.length){ box.innerHTML='<div class="muted">아직 계정이 없어요. ➕ 계정 등록으로 넣어보세요.</div>'; return; }
+    box.innerHTML=rows.map((r,i)=>{
+      const st=SEED_STATUS[r.status]||[r.status,'var(--sub)'];
+      const nexts=(SEED_NEXT[r.status]||[]).map(ns=>{
+        const s2=SEED_STATUS[ns]||[ns,'var(--sub)'];
+        return '<button class="btn sm" data-seedstatus="'+r.id+'" data-to="'+ns+'" style="color:'+s2[1]+'">→ '+s2[0]+'</button>';
+      }).join('');
+      const initial=(r.blog_name||r.display_name||r.login||'?').trim().charAt(0).toUpperCase();
+      const avatar=r.profile_image_url
+        ? '<img src="'+r.profile_image_url.replace(/"/g,'&quot;')+'" alt="" style="width:34px;height:34px;border-radius:50%;object-fit:cover;flex-shrink:0;background:var(--line)" onerror="this.style.display=\'none\'" />'
+        : '<span style="width:34px;height:34px;border-radius:50%;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f9dd86,#c9a03f);color:#231a08;font-weight:900;font-size:15px">'+initial+'</span>';
+      const profileDot=r.profile_image_url||r.bio?'<span title="프로필 채움" style="color:#7dd88a">🪪</span>':'<span title="프로필 미완성" style="color:#f7cd63">🪪 미완성</span>';
+      return '<div class="row">'+
+        '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'+
+          avatar+
+          '<b style="font-size:14px"><span style="color:var(--gold)">'+(i+1)+'.</span> '+(r.blog_name||r.display_name||r.login)+'</b>'+
+          '<span class="muted">@'+r.login+'</span>'+
+          '<span class="pill" style="background:'+st[1]+'22;color:'+st[1]+'">'+st[0]+'</span>'+
+          '<span class="pill" style="background:var(--line);color:var(--sub)">'+(PLAT_LABEL[r.platform]||r.platform)+'</span>'+
+          (r.source==='bought'?'<span class="muted" title="비실명 구매">🛒</span>':'')+
+          profileDot+'</div>'+
+        (r.bio?'<div class="muted" style="margin:6px 0 2px;font-style:italic">"'+r.bio+'"</div>':'')+
+        '<div class="muted" style="margin:4px 0 8px">'+
+          (r.target_keyword?'🎯 '+r.target_keyword+' · ':'')+'🌱 워밍 '+(r.warmup_day||0)+'일 · 📝 '+(r.post_count||0)+' · 🤝 '+(r.neighbor_count||0)+
+          (r.health_note?' · <span style="color:var(--danger)">⚠️ '+r.health_note+'</span>':'')+'</div>'+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap">'+nexts+
+          '<button class="btn sm" data-seededit="'+r.id+'">✏️ 수정</button>'+
+          '<button class="btn danger sm" data-seeddel="'+r.id+'" style="margin-left:auto">🗑</button></div>'+
+      '</div>';
+    }).join('');
+    box.querySelectorAll('[data-seedstatus]').forEach(b=>b.onclick=async()=>{
+      const {error}=await sb.rpc('gs_seed_set_status',{p_token:TOKEN,p_id:b.dataset.seedstatus,p_status:b.dataset.to});
+      if(error){alert('상태 변경 실패: '+error.message);return;} loadSeed();
+    });
+    box.querySelectorAll('[data-seededit]').forEach(b=>b.onclick=()=>{
+      const r=seedRows.find(x=>x.id===b.dataset.seededit); if(!r)return;
+      seedEditId=r.id;
+      $('sfLogin').value=r.login||''; $('sfPassword').value=r.password||'';
+      $('sfPhone').value=r.phone_used||''; $('sfKeyword').value=r.target_keyword||''; $('sfBlogName').value=r.blog_name||'';
+      $('sfDisplayName').value=r.display_name||''; $('sfProfileImage').value=r.profile_image_url||''; $('sfBio').value=r.bio||''; seedSyncPreview();
+      $('seedFormTitle').textContent='✏️ 계정 수정 — '+r.login; $('sfMsg').textContent='';
+      $('seedForm').style.display='block'; $('seedForm').scrollIntoView({behavior:'smooth',block:'center'});
+    });
+    box.querySelectorAll('[data-seeddel]').forEach(b=>b.onclick=async()=>{
+      if(!confirm('이 계정을 목록에서 삭제할까요?'))return;
+      const {error}=await sb.rpc('gs_seed_delete',{p_token:TOKEN,p_id:b.dataset.seeddel});
+      if(error){alert('삭제 실패: '+error.message);return;} loadSeed();
+    });
+  }
+
+  // ══════════════════════════════════════════════════════════
+  //  🚀 컨트롤타워 — 계정 골라 → 글 생성 → 순차 발행
+  // ══════════════════════════════════════════════════════════
+  const BOT='http://localhost:3363';               // 앱의 발행봇(naver-bot)
+  const GEMINI_MODELS=['gemini-2.0-flash','gemini-2.5-flash','gemini-1.5-flash'];
+  let twRows=[];                                    // 컨트롤타워 계정 목록
+  let twSel=new Set();                              // 선택된 계정 id
+  let twPost=null;                                  // 생성된 글 {title,content,tags}
+  let twTerm=30, twImg='flow', twImgCount=3, twShowWin=false;   // 설정(twShowWin=창 보기)
+  let twRun='idle';                                 // idle|running|paused
+  let twStopFlag=false, twPauseFlag=false, twResumeIdx=0;
+
+  // 로그(다색상) — 배열에 저장(크게보기 모달 동기화 + 캡처 이미지 지원)
+  let twLogArr=[];   // {t, type:'text'|'shot', msg/caption, color, dataUrl}
+  const C={sys:'#9ca3af',info:'#60a5fa',step:'#c084fc',acct:'#f5c451',ok:'#4ade80',pub:'#2dd4bf',warn:'#fb923c',err:'#f87171',term:'#a3e635'};
+  function twLogRowHtml(e){
+    const t=new Date(e.t).toLocaleTimeString('ko-KR',{hour12:false});
+    if(e.type==='shot'){
+      return '<div style="margin:6px 0"><div style="color:'+C.pub+';font-weight:700;margin-bottom:4px">📸 '+t+' '+(e.caption||'화면').replace(/</g,'&lt;')+'</div><img src="'+e.dataUrl+'" style="display:block;max-width:min(480px,100%);max-height:300px;border-radius:8px;border:1px solid rgba(255,255,255,.15)"></div>';
+    }
+    return '<div style="display:flex;gap:8px;padding:2px 4px"><span style="color:#4b5563;flex-shrink:0">'+t+'</span><span style="color:'+(e.color||'#9ca3af')+';word-break:break-all;white-space:pre-wrap">'+(e.msg||'').replace(/</g,'&lt;')+'</span></div>';
+  }
+  function twRenderLastLog(){
+    const box=$('twLog'); if(box.querySelector('[style*="center"]')&&box.children.length===1) box.innerHTML='';
+    const e=twLogArr[twLogArr.length-1]; if(!e) return;
+    box.insertAdjacentHTML('beforeend',twLogRowHtml(e)); box.scrollTop=box.scrollHeight;
+    if($('twLogModal').style.display==='flex'){ const big=$('twLogBig'); big.insertAdjacentHTML('beforeend',twLogRowHtml(e)); big.scrollTop=big.scrollHeight; }
+  }
+  function twPush(msg,color){ twLogArr.push({t:Date.now(),type:'text',msg,color}); twRenderLastLog(); }
+  function twShot(caption,dataUrl){ twLogArr.push({t:Date.now(),type:'shot',caption,dataUrl}); twRenderLastLog(); }
+
+  // ── Gemini 키 (입력칸에서 저장/로드) ──
+  function geminiKey(){ return localStorage.getItem('gs_seed_gemini_key')||''; }
+  function twGemStateSync(){ $('twGemState').textContent=geminiKey()?'✅ 등록됨':'⚠ 키 없음'; }
+  (function initGemKey(){ const el=document.getElementById('twGemKey'); if(el) el.value=geminiKey(); twGemStateSync(); })();
+  $('twGemSave').onclick=()=>{ const k=$('twGemKey').value.trim(); localStorage.setItem('gs_seed_gemini_key',k); $('twGemMsg').textContent=k?'✅ 저장됨':'비웠어요'; $('twGemMsg').style.color='var(--good)'; twGemStateSync(); };
+  // 🗂 오른쪽 설정 탭 전환
+  document.querySelectorAll('[data-twtab]').forEach(b=>b.onclick=()=>{
+    document.querySelectorAll('[data-twtab]').forEach(x=>x.classList.remove('on')); b.classList.add('on');
+    const tab=b.dataset.twtab;
+    document.querySelectorAll('[data-twpane]').forEach(p=>{ p.style.display=(p.dataset.twpane===tab)?'block':'none'; });
+  });
+  $('twGemToggle').onclick=()=>{ const b=$('twGemBody'),a=$('twGemArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twGemTag').textContent=o?'▶ 펴기':'▼ 접기'; };
+  $('twFlowToggle').onclick=()=>{ const b=$('twFlowBody'),a=$('twFlowArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twFlowTag').textContent=o?'▶ 펴기':'▼ 접기'; };
+  // 💬 인사말 (localStorage 저장 + 상태)
+  function twGreetSync(){ $('twGreetState').textContent=($('twGreet').value.trim()?'✅ 있음':''); }
+  (function(){ $('twGreet').value=localStorage.getItem('gs_tw_greeting')||''; twGreetSync(); })();
+  $('twGreet').oninput=()=>{ localStorage.setItem('gs_tw_greeting',$('twGreet').value); twGreetSync(); };
+  $('twGreetToggle').onclick=()=>{ const b=$('twGreetBody'),a=$('twGreetArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twGreetTag').textContent=o?'▶ 펴기':'▼ 접기'; };
+  async function callAI(prompt){
+    const key=geminiKey(); if(!key) throw new Error('Gemini API 키를 먼저 입력·저장하세요(🔑 칸)');
+    for(const model of GEMINI_MODELS){
+      try{
+        const r=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+model+':generateContent?key='+key,
+          {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{maxOutputTokens:8000}})});
+        if(!r.ok) continue;
+        const d=await r.json(); const t=d.candidates?.[0]?.content?.parts?.[0]?.text||''; if(t) return t;
+      }catch(e){ continue; }
+    }
+    throw new Error('Gemini 응답 실패(키 확인)');
+  }
+  function parseArr(text){ try{const m=text.match(/\[[\s\S]*\]/); if(m){const a=JSON.parse(m[0]); if(Array.isArray(a)) return a.map(String);}}catch(e){} return text.split('\n').map(s=>s.replace(/^[-*\d.\s"]+/,'').replace(/["\s]+$/,'').trim()).filter(Boolean); }
+  function stripMd(t){ return t.replace(/^#+\s*/gm,'').replace(/\*\*/g,'').replace(/^[-+]\s+/gm,'').trim(); }
+
+  // ── 계정 불러오기(컨트롤타워) ──
+  // 수천 개 계정 관점: 데이터는 한 번 로드 → 검색/필터/정렬/페이지는 클라에서.
+  const TW_STATUS={created:['생성됨','#b0a894'],profiled:['프로필','#7aa2f7'],posted:['발행함','#7dcfff'],warming:['워밍업','#f7cd63'],ready:['준비완료','#7dd88a'],active:['투입중','#22c55e'],resting:['휴식','#bb9af7'],banned:['밴','#ff8a8a'],error:['오류','#ff8a8a']};
+  const TW_PAGE=20;              // 페이지당 계정 수
+  let twPage=0;
+  async function twLoad(){
+    if(!TOKEN) return;
+    const {data,error}=await sb.rpc('gs_seed_list',{p_token:TOKEN,p_purpose:'brand_search',p_platform:'naver'});
+    if(error){ $('twAccts').innerHTML='<div class="muted" style="padding:12px">오류: '+error.message+'</div>'; return; }
+    twRows=data||[];
+    const ids=new Set(twRows.map(r=>r.id)); twSel=new Set([...twSel].filter(id=>ids.has(id)));  // 사라진 계정 선택 해제
+    twRender();
+  }
+  // 검색+필터+정렬 적용된 목록
+  function twFiltered(){
+    const q=($('twSearch').value||'').trim().toLowerCase();
+    const sf=$('twStatusFilter').value;
+    let rows=twRows.filter(r=>{
+      if(sf&&r.status!==sf) return false;
+      if(!q) return true;
+      return (r.login||'').toLowerCase().includes(q)||(r.blog_name||'').toLowerCase().includes(q)||(r.target_keyword||'').toLowerCase().includes(q);
+    });
+    const asc=$('twSort').value==='old';
+    rows.sort((a,b)=>{ const d=new Date(a.created_at)-new Date(b.created_at); return asc?d:-d; });
+    return rows;
+  }
+  function twRender(){
+    const rows=twFiltered();
+    const box=$('twAccts');
+    $('twTotalCount').textContent=twRows.length;
+    $('twShownCount').textContent=rows.length;
+    $('twSelCount').textContent=twSel.size;
+    if(!twRows.length){ box.innerHTML='<div class="muted" style="padding:12px">등록된 계정이 없어요. 아래 계정농사에서 먼저 등록하세요.</div>'; $('twPager').innerHTML=''; return; }
+    if(!rows.length){ box.innerHTML='<div class="muted" style="padding:12px">검색/필터에 맞는 계정이 없어요.</div>'; $('twPager').innerHTML=''; return; }
+    const pages=Math.ceil(rows.length/TW_PAGE);
+    if(twPage>=pages) twPage=0;
+    const pageRows=rows.slice(twPage*TW_PAGE,(twPage+1)*TW_PAGE);
+    box.innerHTML=pageRows.map(r=>{
+      const on=twSel.has(r.id);
+      const st=TW_STATUS[r.status]||[r.status,'var(--sub)'];
+      const noPw=!r.password;
+      return '<div data-twrow="'+r.id+'" style="display:grid;grid-template-columns:30px 1fr 80px 60px 54px;gap:0;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);cursor:pointer;background:'+(on?'rgba(245,196,81,.10)':'transparent')+'">'
+        +'<span><input type="checkbox" data-twacct="'+r.id+'" '+(on?'checked':'')+'></span>'
+        +'<span style="min-width:0"><span style="font-weight:700;font-size:12px">'+(r.blog_name||r.login)+'</span> <span class="muted" style="font-size:10.5px">'+r.login+'</span>'+(noPw?' <span style="color:#f87171;font-size:10px">🔑없음</span>':'')+'</span>'
+        +'<span class="pill" style="background:'+st[1]+'22;color:'+st[1]+';font-size:10px">'+st[0]+'</span>'
+        +'<span class="muted" style="font-size:11px">📝'+(r.post_count||0)+'</span>'
+        +'<span class="muted" style="font-size:11px">'+(r.today_posts||0)+'건</span>'
+        +'</div>';
+    }).join('');
+    box.querySelectorAll('[data-twrow]').forEach(row=>row.onclick=(e)=>{ if(e.target.tagName==='INPUT')return; const id=row.dataset.twrow; twSel.has(id)?twSel.delete(id):twSel.add(id); twRender(); });
+    box.querySelectorAll('[data-twacct]').forEach(c=>c.onchange=()=>{ c.checked?twSel.add(c.dataset.twacct):twSel.delete(c.dataset.twacct); twRender(); });
+    // 헤더 체크(표시된 현재 페이지 전체)
+    const hc=$('twHeadCheck'); if(hc){ hc.checked=pageRows.every(r=>twSel.has(r.id)); hc.onclick=()=>{ const all=pageRows.every(r=>twSel.has(r.id)); pageRows.forEach(r=>all?twSel.delete(r.id):twSel.add(r.id)); twRender(); }; }
+    // 페이지네이션
+    if(pages<=1){ $('twPager').innerHTML=''; }
+    else{
+      let h='<button class="btn sm" '+(twPage===0?'disabled':'')+' id="twPrev">‹ 이전</button>';
+      h+='<span class="muted" style="font-size:12px">'+(twPage+1)+' / '+pages+' 페이지</span>';
+      h+='<button class="btn sm" '+(twPage>=pages-1?'disabled':'')+' id="twNext">다음 ›</button>';
+      $('twPager').innerHTML=h;
+      if($('twPrev'))$('twPrev').onclick=()=>{ if(twPage>0){twPage--;twRender();} };
+      if($('twNext'))$('twNext').onclick=()=>{ if(twPage<pages-1){twPage++;twRender();} };
+    }
+  }
+  function twSelectedRows(){ return twRows.filter(r=>twSel.has(r.id)); }
+
+  // 계정농사 육성계정풀 접기/펴기
+  $('seedPoolToggle').onclick=()=>{
+    const body=$('seedPoolBody'), arr=$('seedPoolArrow');
+    const open=body.style.display!=='none';
+    body.style.display=open?'none':'block'; arr.textContent=open?'▶':'▼';
+  };
+
+  // 검색/필터/정렬 → 즉시 재렌더(1페이지로)
+  $('twSearch').oninput=()=>{ twPage=0; twRender(); };
+  $('twStatusFilter').onchange=()=>{ twPage=0; twRender(); };
+  $('twSort').onchange=()=>{ twPage=0; twRender(); };
+  // 빠른 조건 선택(수백 개 한 번에)
+  $('twSelAllShown').onclick=()=>{ twFiltered().forEach(r=>twSel.add(r.id)); twRender(); };
+  $('twSelTodayNone').onclick=()=>{ twFiltered().forEach(r=>{ if((r.today_posts||0)===0) twSel.add(r.id); }); twRender(); };
+  $('twSelReady').onclick=()=>{ twFiltered().forEach(r=>{ if(r.status==='ready') twSel.add(r.id); }); twRender(); };
+  $('twSelNone').onclick=()=>{ twSel.clear(); twRender(); };
+  $('twSelN').onclick=()=>{ const n=parseInt($('twSelNInput').value)||0; if(n<=0){alert('숫자를 입력하세요');return;} const rows=twFiltered(); twSel.clear(); rows.slice(0,n).forEach(r=>twSel.add(r.id)); twRender(); };
+  // 새로고침 — 누르면 항상 반응(회전+불러오는 중, 목업 금지)
+  $('twReload').onclick=async()=>{ const b=$('twReload'); const old=b.textContent; b.disabled=true; b.textContent='⏳'; try{ await twLoad(); }finally{ b.textContent=old; b.disabled=false; } };
+
+  // ── 설정 칩 ──
+  $('twTermChips').querySelectorAll('[data-term]').forEach(c=>c.onclick=()=>{ $('twTermChips').querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); twTerm=Number(c.dataset.term); });
+  $('twImgChips').querySelectorAll('[data-img]').forEach(c=>c.onclick=()=>{ $('twImgChips').querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); twImg=c.dataset.img; $('twImgCountWrap').style.display=(twImg==='none')?'none':'block'; $('twFlowWrap').style.display=(twImg==='flow')?'block':'none'; });
+  $('twImgCountChips').querySelectorAll('[data-imgc]').forEach(c=>c.onclick=()=>{ $('twImgCountChips').querySelectorAll('.chip').forEach(x=>x.classList.remove('on')); c.classList.add('on'); twImgCount=Number(c.dataset.imgc); });
+  // 🪟 창 보기 토글
+  $('twShowWindow').onclick=()=>{ twShowWin=!twShowWin; const b=$('twShowWindow'); b.textContent='🪟 창 보기 '+(twShowWin?'ON':'OFF'); b.classList.toggle('gold',twShowWin); $('twShowWindowDesc').innerHTML='🪟 <b>창 보기</b> — 켜면 봇이 <b>실제 크롬 창</b>을 띄워 로그인→글쓰기→발행 움직임을 직접 봐요. OFF면 창 없이 백그라운드로 조용히 돌고, <b>대신 로그에 진행 캡처</b>가 떠요. '+(twShowWin?'<b style="color:var(--gold)">지금 ON — 다음 발행부터 크롬 창이 떠요.</b>':'지금 OFF — 창 없이 백그라운드(로그에 캡처).'); };
+
+  // ── 🎬 Flow 다중슬롯 연결 (원터치와 동일 개념: 슬롯 여러 개 + 전체연결 + 크레딧 소진 시 자동 전환) ──
+  let twFlowSlots=(()=>{try{const s=JSON.parse(localStorage.getItem('gs_flow_slots')||'[]');return Array.isArray(s)&&s.length?s:[{id:0,name:'계정 1'}];}catch(e){return [{id:0,name:'계정 1'}];}})();
+  let twFlowReady={};            // {slotId:true}
+  let twFlowExhausted=new Set(); // 이번 실행에서 크레딧 소진된 슬롯
+  function twSaveFlowSlots(){ localStorage.setItem('gs_flow_slots',JSON.stringify(twFlowSlots)); }
+  async function twFlowStatus(slot){ try{ const r=await fetch(BOT+'/api/flow/status/'+slot); const d=await r.json(); return !!d.ready; }catch(e){ return false; } }
+  async function twFlowLaunch(slot){
+    twPush('🎬 Flow 크롬 여는 중 (슬롯 '+slot+')… 크롬 창에서 구글 로그인 1회',C.step);
+    try{
+      const r=await fetch(BOT+'/api/flow/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slot})});
+      const d=await r.json().catch(()=>({}));
+      if(r.ok&&d.ok){ twFlowReady[slot]=true; twPush(d.already?'✅ Flow 준비됨(슬롯 '+slot+')':'✅ Flow 크롬 열림 — 구글 로그인만 해주세요(슬롯 '+slot+')',C.ok); twRenderFlowSlots(); return true; }
+      twPush('❌ Flow 연결 실패(슬롯 '+slot+'): '+(d.error||('HTTP '+r.status)),C.err); return false;
+    }catch(e){ twPush('❌ Flow 연결 실패: '+e.message+' (앱 발행봇 실행 중인지 확인)',C.err); return false; }
+  }
+  function twRenderFlowSlots(){
+    $('twFlowSlots').innerHTML=twFlowSlots.map(s=>{
+      const on=twFlowReady[s.id];
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:9px;background:var(--panel2)">'
+        +'<span style="width:9px;height:9px;border-radius:50%;background:'+(on?'#4ade80':'#f87171')+';flex-shrink:0"></span>'
+        +'<input value="'+s.name.replace(/"/g,'&quot;')+'" data-flowname="'+s.id+'" style="flex:1;min-width:80px;padding:6px 9px;font-size:12px" />'
+        +'<span class="muted" style="font-size:11px;flex-shrink:0">'+(on?'연결됨':'미연결')+'</span>'
+        +'<button class="btn sm" data-flowconn="'+s.id+'">🔗 연결</button>'
+        +(twFlowSlots.length>1?'<button class="btn danger sm" data-flowdel="'+s.id+'">🗑</button>':'')
+        +'</div>';
+    }).join('');
+    $('twFlowSlots').querySelectorAll('[data-flowconn]').forEach(b=>b.onclick=()=>twFlowLaunch(Number(b.dataset.flowconn)));
+    $('twFlowSlots').querySelectorAll('[data-flowdel]').forEach(b=>b.onclick=()=>{ twFlowSlots=twFlowSlots.filter(x=>x.id!==Number(b.dataset.flowdel)); twSaveFlowSlots(); twRenderFlowSlots(); });
+    $('twFlowSlots').querySelectorAll('[data-flowname]').forEach(el=>el.onchange=()=>{ const s=twFlowSlots.find(x=>x.id===Number(el.dataset.flowname)); if(s){ s.name=el.value; twSaveFlowSlots(); } });
+    const rc=twFlowSlots.filter(s=>twFlowReady[s.id]).length; const fs=$('twFlowState'); if(fs) fs.textContent=rc+'/'+twFlowSlots.length+' 연결';
+  }
+  $('twFlowAddSlot').onclick=()=>{ const id=Math.max(-1,...twFlowSlots.map(s=>s.id))+1; twFlowSlots.push({id,name:'계정 '+(twFlowSlots.length+1)}); twSaveFlowSlots(); twRenderFlowSlots(); };
+  $('twFlowConnectAll').onclick=async()=>{ for(const s of twFlowSlots){ if(!twFlowReady[s.id]) await twFlowLaunch(s.id); } };
+  twRenderFlowSlots();
+
+  // ── 🔗 온파트너/일반 링크 (본문 끝 카드) ──
+  let twLinkList=(()=>{try{const s=JSON.parse(localStorage.getItem('gs_tw_links')||'[]');return Array.isArray(s)?s:[];}catch(e){return [];}})();
+  function twSaveLinks(){ localStorage.setItem('gs_tw_links',JSON.stringify(twLinkList)); }
+  function twRenderLinks(){
+    $('twLinks').innerHTML=twLinkList.map(u=>'<div style="display:flex;align-items:center;gap:6px;padding:6px 9px;border:1px solid var(--line);border-radius:8px"><span style="flex:1;min-width:0;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+u+'</span><button class="btn danger sm" data-linkdel="'+u.replace(/"/g,'&quot;')+'">✕</button></div>').join('');
+    $('twLinks').querySelectorAll('[data-linkdel]').forEach(b=>b.onclick=()=>{ twLinkList=twLinkList.filter(x=>x!==b.dataset.linkdel); twSaveLinks(); twRenderLinks(); });
+  }
+  function twAddLink(u,inputId){ u=(u||'').trim(); if(!u) return; try{new URL(u);}catch(e){ alert('올바른 링크가 아니에요'); return; } if(twLinkList.includes(u)){ alert('이미 추가됨'); return; } if(twLinkList.length>=3){ alert('최대 3개'); return; } twLinkList.push(u); twSaveLinks(); twRenderLinks(); if(inputId)$(inputId).value=''; }
+  $('twPartnerAdd').onclick=()=>twAddLink($('twPartnerInput').value,'twPartnerInput');
+  $('twLinkAdd').onclick=()=>twAddLink($('twLinkInput').value,'twLinkInput');
+  twRenderLinks();
+
+  // ── 키워드 추천 ──
+  $('twRecommend').onclick=async()=>{
+    const btn=$('twRecommend'); btn.disabled=true; btn.textContent='🔥 추천 중…';
+    try{
+      let hot=[]; try{ const r=await fetch(BOT+'/api/hot-issues?category='+encodeURIComponent('실시간')); const d=await r.json(); if(Array.isArray(d.items)) hot=d.items.slice(0,25); }catch(e){}
+      const hint=hot.length?'\n\n[요즘 뜨는 주제 참고]\n'+hot.join(', '):'';
+      const text=await callAI('네이버 블로그 SEO 키워드 8개를 JSON 배열로만. 2~4어절, 실제 검색량 많은 형태, 분야 골고루(맛집·여행·재테크·건강·육아·뷰티·생활).'+hint+'\nJSON 배열만.');
+      const recs=parseArr(text).slice(0,8);
+      $('twRecs').innerHTML=recs.map(k=>'<button class="chip" data-rec="'+k.replace(/"/g,'&quot;')+'">'+k+'</button>').join('');
+      $('twRecs').querySelectorAll('[data-rec]').forEach(b=>b.onclick=()=>{ $('twKw').value=b.dataset.rec; });
+    }catch(e){ alert('추천 실패: '+e.message); }
+    btn.disabled=false; btn.textContent='🔥 키워드 추천';
+  };
+
+  // ── 글 생성(1회) ──
+  $('twGen').onclick=async()=>{
+    const kw=$('twKw').value.trim(); if(!kw){ alert('주제 키워드를 넣어주세요'); return; }
+    const btn=$('twGen'); btn.disabled=true; btn.textContent='✍️ 생성 중…';
+    try{
+      const tText=await callAI('네이버 블로그 SEO 제목 10개를 JSON 배열로만. 키워드 "'+kw+'"를 앞부분에 포함, 20~35자, 과장·낚시 금지.\nJSON 배열만.');
+      const title=(parseArr(tText).filter(Boolean)[0])||kw;
+      const bText=await callAI('당신은 블로그 작가입니다. 키워드 "'+kw+'" 제목 "'+title+'"로 1500자 내외 본문을 써요.\n규칙: 마크다운(## ** *) 금지, 한자·영어단어 금지, 사람 말투(~해요/~거든요), 키워드를 5~6번 반복, 4~6개 소제목(## 없이), 단락 사이 빈 줄.\n출력 형식:\n태그: 태그1, 태그2, 태그3\n\n(본문)');
+      const cleaned=stripMd(bText);
+      const tagM=cleaned.match(/태그[:\s]*([^\n]+)/);
+      const bodyM=cleaned.match(/태그[^\n]*\n([\s\S]+)/);
+      const body=bodyM?bodyM[1].trim():cleaned;
+      twPost={title,content:body,tags:tagM?tagM[1].trim():''};
+      $('twTitle').textContent=title;
+      $('twBody').textContent=body;
+      $('twTags').textContent=twPost.tags?twPost.tags.split(',').map(t=>'#'+t.replace('#','').trim()).join(' '):'';
+      $('twPreview').style.display='block';
+    }catch(e){ alert('글 생성 실패: '+e.message); }
+    btn.disabled=false; btn.textContent='✨ 글 생성';
+  };
+
+  // ── 발행 상태 UI ──
+  function twSetRun(s){
+    twRun=s;
+    const st=$('twStatus');
+    if(s==='running'){ st.textContent='🟢 발행 중'; st.style.cssText='background:rgba(34,197,94,.15);color:#22c55e'; }
+    else if(s==='paused'){ st.textContent='⏸ 정지됨'; st.style.cssText='background:rgba(251,146,60,.15);color:#fb923c'; }
+    else if(s==='done'){ st.textContent='✔ 완료'; st.style.cssText='background:rgba(96,165,250,.15);color:#60a5fa'; }
+    else { st.textContent='⚪ 대기'; st.style.cssText='background:var(--line);color:var(--sub)'; }
+    $('twStart').disabled=(s==='running'||s==='paused');
+    $('twPause').disabled=(s!=='running');
+    $('twResume').disabled=(s!=='paused');
+    $('twCancel').disabled=(s!=='running'&&s!=='paused');
+  }
+
+  // ── 계정 1개 발행 ──
+  async function twPublishOne(acc){
+    const userId='gs_'+acc.id, label=acc.blog_name||acc.login;
+    // 1) 세션/로그인
+    twPush('세션 확인 중…',C.step);
+    let hasSession=false;
+    try{ const sr=await fetch(BOT+'/api/session-status/'+userId); const sd=await sr.json(); hasSession=!!sd.naver; }catch(e){}
+    if(!hasSession){
+      if(!acc.password) return {ok:false,at:'로그인',err:'저장된 비번 없음'};
+      twPush('네이버 로그인 중 ('+acc.login+')…',C.step);
+      const lr=await fetch(BOT+'/api/naver/save-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId,id:acc.login,pw:acc.password})});
+      const ld=await lr.json().catch(()=>({}));
+      if(!lr.ok||!ld.success) return {ok:false,at:'로그인',err:ld.error||'로그인 실패'};
+      twPush('로그인 성공 · 블로그 '+(ld.blogId||'?'),C.ok);
+    } else twPush('기존 세션 사용',C.step);
+    // 2) 카테고리
+    let cats=[]; try{ const cr=await fetch(BOT+'/api/naver/categories/'+userId); const cd=await cr.json(); if(cd.categories?.length) cats=cd.categories; }catch(e){}
+    const cat=cats[0]||{};
+    // 3) 이미지 생성 (원터치 방식) — Flow=CDP 크롬(9322+slot), AI=봇 replicate. 계정마다 새로 생성.
+    const wantN=twImg==='none'?0:twImgCount;
+    const imgs=[];
+    if(twImg==='flow'&&wantN>0){
+      const prompts=Array.from({length:wantN},(_,i)=>'Korean blog photograph about '+twPost.title+', natural lighting, realistic, no text no watermark, '+(i+1));
+      const captions=Array.from({length:wantN},()=>((twPost.tags.split(',')[0]||twPost.title).replace('#','').trim()));
+      // 연결된 슬롯 순회(크레딧 소진 시 다음 슬롯)
+      const trySlots=twFlowSlots.map(s=>s.id).filter(id=>twFlowReady[id]&&!twFlowExhausted.has(id));
+      let done=false;
+      for(const slotId of trySlots){
+        twPush('🎨 Flow 이미지 '+wantN+'장 생성 중 (슬롯 '+slotId+')…',C.step);
+        try{
+          const fr=await fetch(BOT+'/api/flow-generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompts,captions,cdpPort:9322+slotId})});
+          const fd=await fr.json().catch(()=>({}));
+          if(fr.status===402||fd.code==='FLOW_NO_CREDIT'){ twFlowExhausted.add(slotId); twPush('⏸ 슬롯 '+slotId+' 크레딧 소진 — 다음 계정으로',C.warn); continue; }
+          if(fr.ok&&Array.isArray(fd.images)&&fd.images.length){ imgs.push(...fd.images.map(im=>im.src).filter(Boolean)); twPush('✅ Flow 이미지 '+imgs.length+'/'+wantN+'장',C.ok); done=true; break; }
+          twPush('❌ Flow 이미지 실패: '+(fd.error||('HTTP '+fr.status)),C.err); done=true; break;
+        }catch(e){ twPush('❌ Flow 오류: '+e.message,C.err); done=true; break; }
+      }
+      if(!done&&!imgs.length) return {ok:false,at:'이미지',err:'연결된 Flow 계정이 없거나 모두 크레딧 소진'};
+    } else if(twImg==='ai'&&wantN>0){
+      const key=localStorage.getItem('gs_seed_replicate_key')||'';
+      if(!key){ twPush('⚠️ Replicate 키 없음 — 이미지 없이 발행',C.warn); }
+      else for(let i=0;i<wantN;i++){ twPush('🎨 AI 이미지 '+(i+1)+'/'+wantN+'…',C.step);
+        try{ const ir=await fetch(BOT+'/api/replicate-image',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,prompt:'Korean blog photo about '+twPost.title+', realistic, no text, '+i,aspectRatio:'16:9'})}); const id=await ir.json().catch(()=>({})); if(ir.ok&&(id.image||id.sourceUrl)) imgs.push(id.image||id.sourceUrl); }catch(e){}
+      }
+      twPush('✅ AI 이미지 '+imgs.length+'/'+wantN+'장',C.ok);
+    }
+    // 4) blocks 조립 — 첫이미지 → 본문+이미지 분산 → 링크 맨끝
+    const blocks=[]; const paras=twPost.content.split(/\n\n+/).map(s=>s.trim()).filter(Boolean);
+    if(imgs[0]) blocks.push({type:'image',src:imgs[0],alt:''});
+    // 💬 인사말 — 첫 이미지 바로 아래 1회
+    const greet=(localStorage.getItem('gs_tw_greeting')||'').trim();
+    if(greet) blocks.push({type:'text',content:greet});
+    const rest=imgs.slice(1); const every=rest.length?Math.max(1,Math.floor(paras.length/(rest.length+1))):0; let ri=0;
+    paras.forEach((p,i)=>{ blocks.push({type:'text',content:p}); if(every&&ri<rest.length&&(i+1)%every===0){ blocks.push({type:'image',src:rest[ri],alt:twPost.title}); ri++; } });
+    while(ri<rest.length){ blocks.push({type:'image',src:rest[ri],alt:twPost.title}); ri++; }
+    for(const u of twLinkList){ if(u) blocks.push({type:'text',content:u}); }   // 🔗 링크 맨끝
+    // 5) 발행
+    twPush('🚀 네이버 발행 중…',C.pub);
+    const payload={userId,platform:'naver',title:twPost.title,content:twPost.content,naverId:acc.login,pubScope:'full',tags:twPost.tags.split(',').map(t=>t.replace('#','').trim()).filter(Boolean),imageUrl:imgs[0]||undefined,categoryId:cat.id||undefined,visibility:'public',blocks,showWindow:twShowWin};
+    const r=await fetch(BOT+'/api/publish-full',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const d=await r.json().catch(()=>({}));
+    if(Array.isArray(d.shots)) d.shots.forEach(s=>twShot(s.caption||'발행 화면',s.dataUrl));   // 📸 진행 캡처 로그에
+    if(!r.ok) return {ok:false,at:'발행',err:d.error||('HTTP '+r.status)};
+    return {ok:true,url:d.postUrl||''};
+  }
+
+  // ── 순차 발행 루프 ──
+  let twOk=0, twFail=0, twSkip=0;
+  function twSyncProgress(i,total){ $('twProgress').innerHTML='📊 <b>'+(i)+'/'+total+'</b> 진행 · <span style="color:#4ade80">✅완료 '+twOk+'</span> · <span style="color:#f87171">❌실패 '+twFail+'</span> · <span style="color:#fb923c">⏭건너뜀 '+twSkip+'</span> · <span style="color:#a3e635">남음 '+(total-i)+'</span>'; }
+  async function twDeployLoop(startIdx,queue){
+    twStopFlag=false; twPauseFlag=false; twSetRun('running');
+    const total=queue.length;
+    if(startIdx===0){
+      twOk=0; twFail=0; twSkip=0;
+      twPush('━━━━━━━━━━ 🚀 순차 발행 시작 ━━━━━━━━━━',C.sys);
+      twPush('🕒 언제: '+new Date().toLocaleString('ko-KR'),C.info);
+      twPush('👥 몇 개: 선택한 '+total+'개 계정에 순서대로 발행',C.info);
+      twPush('📝 무엇을: "'+twPost.title+'" ('+twPost.content.length+'자)',C.info);
+      twPush('⚙️ 어떻게: 텀 '+twTerm+'분(±15% 랜덤) · 이미지 '+(twImg==='none'?'없음':twImgCount+'장('+twImg+')')+(twLinkList.length?' · 링크 '+twLinkList.length+'개':'')+(twImg==='flow'?' · Flow '+twFlowSlots.filter(s=>twFlowReady[s.id]).length+'계정 연결':''),C.info);
+      twPush('🎯 왜: 같은 글을 여러 계정에 뿌려 검색지면 장악',C.info);
+      twPush('👤 순서: '+queue.map((a,i)=>(i+1)+'.'+(a.blog_name||a.login)).join('  '),C.acct);
+      twPush('────────────────────────────',C.sys);
+    } else twPush('▶ 이어가기 — '+(startIdx+1)+'번째 계정부터 (완료 '+twOk+'·실패 '+twFail+')',C.step);
+    twSyncProgress(startIdx,total);
+    for(let i=startIdx;i<total;i++){
+      if(twStopFlag){ twPush('🛑 취소됨 — 발행 완전 중단 ('+(i)+'/'+total+' 지점)',C.err); break; }
+      if(twPauseFlag){ twResumeIdx=i; twPush('⏸ 정지됨 — '+(i+1)+'번째 계정 앞에서 멈춤. [이어가기]로 여기부터 계속',C.warn); twSetRun('paused'); return; }
+      const acc=queue[i], label=acc.blog_name||acc.login;
+      const t0=Date.now();
+      twPush('',C.sys);
+      twPush('┏━ ['+(i+1)+'/'+total+'] ▶ 시작: '+label+' (🆔 '+acc.login+') ━━',C.acct);
+      twPush('┃ 🕒 '+new Date().toLocaleTimeString('ko-KR')+' · 어디서: 네이버 블로그 · 남은 계정 '+(total-i-1)+'개',C.info);
+      if((acc.today_posts||0)>=1){ twSkip++; twPush('┗━ ⏭ 건너뜀: 오늘 이미 '+acc.today_posts+'건 발행(밴 방지)',C.warn); twSyncProgress(i+1,total); continue; }
+      try{
+        const res=await twPublishOne(acc);
+        const sec=Math.round((Date.now()-t0)/1000);
+        if(res.ok){ twOk++; twPush('┗━ ✅ 완료: '+label+' → '+(res.url||'(주소 확인 중)')+' · 소요 '+sec+'초',C.ok);
+          try{ await sb.rpc('gs_seed_record_publish',{p_token:TOKEN,p_id:acc.id,p_success:true,p_note:null}); }catch(e){}
+        } else { twFail++; twPush('┗━ ❌ 실패: '+label+' ['+res.at+' 단계] '+res.err+' · '+sec+'초',C.err);
+          try{ await sb.rpc('gs_seed_record_publish',{p_token:TOKEN,p_id:acc.id,p_success:false,p_note:'['+res.at+'] '+res.err}); }catch(e){}
+        }
+      }catch(e){ twFail++; twPush('┗━ ❌ 예외: '+label+' — '+e.message,C.err); }
+      twSyncProgress(i+1,total);
+      // 텀
+      if(i<total-1&&!twStopFlag){
+        const nextAcc=queue[i+1], nextLabel=nextAcc.blog_name||nextAcc.login;
+        const ms=Math.round(twTerm*60000*(1+(Math.random()*0.3-0.15)));
+        const mins=Math.floor(ms/60000), secs=Math.round((ms%60000)/1000);
+        twPush('⏳ 다음 계정 대기: 약 '+mins+'분 '+secs+'초 후 → ['+(i+2)+'/'+total+'] '+nextLabel+' (밴 방지 랜덤 텀)',C.term);
+        const end=Date.now()+ms;
+        while(Date.now()<end){ if(twStopFlag||twPauseFlag) break; await new Promise(r=>setTimeout(r,1000)); }
+        if(twStopFlag){ twPush('🛑 취소됨 (텀 대기 중)',C.err); break; }
+        if(twPauseFlag){ twResumeIdx=i+1; twPush('⏸ 정지됨 — [이어가기]로 '+(i+2)+'번째 '+nextLabel+'부터',C.warn); twSetRun('paused'); return; }
+      }
+    }
+    twSetRun('done');
+    twPush('',C.sys);
+    twPush('━━━━━━━━━━ 🏁 순차 발행 종료 ━━━━━━━━━━',twFail===0?C.ok:C.warn);
+    twPush('📊 결과: 총 '+total+'개 중 ✅완료 '+twOk+' · ❌실패 '+twFail+' · ⏭건너뜀 '+twSkip,twFail===0?C.ok:C.warn);
+    twPush('🕒 끝난 시각: '+new Date().toLocaleString('ko-KR'),C.info);
+    twLoad();
+  }
+
+  // ── 제어 버튼 ──
+  $('twStart').onclick=async()=>{
+    const queue=twSelectedRows();
+    if(!queue.length){ alert('발행할 계정을 선택하세요'); return; }
+    if(!twPost){ alert('먼저 글을 생성하세요(② 글 생성)'); return; }
+    // Flow 이미지면 최소 1개 슬롯 연결돼야 함(원터치와 동일 가드)
+    if(twImg==='flow'){
+      let anyReady=false; for(const s of twFlowSlots){ if(twFlowReady[s.id]||await twFlowStatus(s.id)){ twFlowReady[s.id]=true; anyReady=true; } }
+      if(!anyReady){ alert('Flow 이미지가 연결 안 됐어요 → 🎬 Flow 계정 연결에서 "전체 연결"을 먼저 하세요'); twRenderFlowSlots(); return; }
+      twFlowExhausted=new Set();
+    }
+    twResumeIdx=0; twDeployLoop(0,queue);
+  };
+  $('twPause').onclick=()=>{ if(twRun==='running'){ twPauseFlag=true; twPush('⏸ 정지 요청 — 진행 중인 계정 끝내고 멈춤',C.warn); } };
+  $('twResume').onclick=()=>{ if(twRun==='paused'){ twDeployLoop(twResumeIdx,twSelectedRows()); } };
+  $('twCancel').onclick=()=>{ twStopFlag=true; twPauseFlag=false; twPush('🛑 취소 요청',C.err); };
+  function twLogText(){ return twLogArr.map(e=>{ const t=new Date(e.t).toLocaleTimeString('ko-KR',{hour12:false}); return e.type==='shot'?('['+t+'] 📸 '+(e.caption||'화면')):('['+t+'] '+(e.msg||'')); }).join('\n'); }
+  function twCopyLog(){ navigator.clipboard?.writeText(twLogText()).then(()=>alert('로그 복사됨')).catch(()=>alert('복사 실패')); }
+  $('twCopyLog').onclick=twCopyLog;
+  $('twCopyLog2').onclick=twCopyLog;
+  // 🔍 크게 보기 모달
+  $('twLogZoom').onclick=()=>{ const big=$('twLogBig'); big.innerHTML=twLogArr.length?twLogArr.map(twLogRowHtml).join(''):'<div style="opacity:.5;color:#9ca3af">아직 로그가 없어요.</div>'; $('twLogModal').style.display='flex'; big.scrollTop=big.scrollHeight; };
+  $('twLogClose').onclick=()=>{ $('twLogModal').style.display='none'; };
+  $('twLogModal').onclick=(e)=>{ if(e.target===$('twLogModal')) $('twLogModal').style.display='none'; };
 
   // ── 🔑 비번 변경 ──
   $('pwChg').onclick=()=>$('pwModal').style.display='flex';

@@ -416,9 +416,11 @@ export async function publishNaver(params: {
   videoPosition?: "top" | "middle" | "bottom";
   editLogNo?: string;   // ★있으면 새 글이 아니라 '그 글 편집화면'을 열어 기존 본문 비우고 통째 교체 재발행(주소·좋아요 유지)
   editBlogId?: string;  // ★글 살리기 원문 소유 blogId. 활성 세션의 실제 blogId와 다르면 원본 변경 전 안전중단.
+  showWindow?: boolean; // 🪟 창 보기: true면 실제 크롬 창을 띄워 봇 움직임을 눈으로 봄. false(기본)면 백그라운드(headless).
+  onShot?: (caption: string, dataUrl: string) => void;   // 📸 단계별 화면 캡처 콜백(로그에 이미지로 표시)
   signal?: AbortSignal;
 }): Promise<string> {
-  const { userId, title: rawTitle, content, pubScope = "full", tags, imageUrl, categoryId, visibility = "public", scheduleTime, blocks, videoUrl, videoPosition = "middle", editLogNo, editBlogId, signal } = params;
+  const { userId, title: rawTitle, content, pubScope = "full", tags, imageUrl, categoryId, visibility = "public", scheduleTime, blocks, videoUrl, videoPosition = "middle", editLogNo, editBlogId, showWindow = false, onShot, signal } = params;
   if (signal?.aborted) throw new Error("발행이 취소됐습니다");
   const isEdit = !!(editLogNo && /^\d+$/.test(String(editLogNo)));   // 글 살리기(덮어쓰기) 모드
   const title = rawTitle.replace(/\n/g, " ").trim().slice(0, 40);
@@ -475,7 +477,8 @@ export async function publishNaver(params: {
   }
 
   let closingExpected = false;
-  const browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS });
+  // 🪟 창 보기 ON=실제 창 뜸 / OFF=백그라운드(headless). 백그라운드여도 onShot으로 진행 캡처를 로그에 보냄.
+  const browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 50 : 0 });
   const abortPublish = () => {
     closingExpected = true;
     void browser.close().catch(() => {});
@@ -488,6 +491,11 @@ export async function publishNaver(params: {
   await applyAntiDetection(context);
   await context.addCookies(cookies);
   let page = await context.newPage();
+  // 📸 단계별 캡처 → onShot 콜백으로 로그에 이미지 전송(백그라운드여도 진행을 눈으로)
+  const shot = async (caption: string) => {
+    if (!onShot) return;
+    try { const buf = await page.screenshot({ type: "jpeg", quality: 55 }); onShot(caption, `data:image/jpeg;base64,${buf.toString("base64")}`); } catch {}
+  };
   let lastPageAction = "발행 브라우저 초기화";
   let unexpectedPageClose = false;
   const markPageAction = (action: string) => { lastPageAction = action; };
@@ -1621,6 +1629,7 @@ export async function publishNaver(params: {
     session.cookies = newCookies;
     writeSession(naverSessionName(userId), session);
 
+    await shot("발행 완료 화면");
     closingExpected = true;
     signal?.removeEventListener("abort", abortPublish);
     await browser.close();

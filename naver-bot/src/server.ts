@@ -158,6 +158,69 @@ app.delete("/api/session/:platform/:userId", (req, res) => {
   res.json({ success: true });
 });
 
+/* ── 🎬 Flow 크롬(구글 이미지 생성) 다중슬롯 연결 — 웹 컨트롤타워가 fetch로 사용 ──
+   electron flow-launch-chrome를 봇으로 이식. 슬롯별 전용 프로필(구글 계정 여러 개 동시 보유).
+   슬롯별 CDP 포트 9222+slot. 사용량 소진 시 다음 슬롯으로 전환은 발행 루프(클라)가 slot 바꿔 재호출. */
+import { spawn as _spawnFlow } from "child_process";
+const flowChromeProcs: Record<number, any> = {};
+// 🌱 골든시드 전용 Flow: 포트 9322+/프로필 .gs-flow-chrome (퍼블리·트래픽의 9222/.publy-flow-chrome과 분리 → 동시 실행 충돌 방지)
+const FLOW_CDP_BASE = 9322;
+const flowCdpPort = (slot = 0) => FLOW_CDP_BASE + (slot || 0);
+const flowProfileDir = (slot = 0) => path.join(process.env.HOME || process.env.USERPROFILE || ".", slot ? `.gs-flow-chrome-${slot}` : ".gs-flow-chrome");
+function flowChromePath(): string | null {
+  const cands = process.platform === "darwin"
+    ? ["/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"]
+    : process.platform === "win32"
+    ? [path.join(process.env["PROGRAMFILES"] || "C:\\Program Files", "Google\\Chrome\\Application\\chrome.exe"),
+       path.join(process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)", "Google\\Chrome\\Application\\chrome.exe"),
+       path.join(process.env["LOCALAPPDATA"] || "", "Google\\Chrome\\Application\\chrome.exe")]
+    : ["/usr/bin/google-chrome", "/usr/bin/google-chrome-stable", "/usr/bin/chromium-browser"];
+  return cands.find(p => { try { return fs.existsSync(p); } catch { return false; } }) || null;
+}
+async function flowChromeHealthy(slot = 0): Promise<boolean> {
+  const port = flowCdpPort(slot);
+  try {
+    const r = await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(2000) });
+    if (!r.ok) return false;
+    const tabs = await r.json().catch(() => []);
+    return Array.isArray(tabs) && tabs.some((t: any) => t.type === "page");
+  } catch { return false; }
+}
+const FLOW_URL = "https://labs.google/fx/ko/tools/flow";
+
+// Flow 크롬 상태(연결됨?)
+app.get("/api/flow/status/:slot", async (req, res) => {
+  const slot = Number(req.params.slot) || 0;
+  res.json({ ready: await flowChromeHealthy(slot), slot, port: flowCdpPort(slot) });
+});
+
+// Flow 크롬 띄우기(로그인 창) — 슬롯 지정
+app.post("/api/flow/launch", async (req, res) => {
+  const slot = Number(req.body?.slot) || 0;
+  const chromePath = flowChromePath();
+  if (!chromePath) return res.status(400).json({ ok: false, error: "크롬을 찾을 수 없어요. Google Chrome을 먼저 설치해주세요." });
+  const profileDir = flowProfileDir(slot);
+  // 이미 살아있으면 창만 앞으로
+  if (await flowChromeHealthy(slot)) {
+    try { const rv = _spawnFlow(chromePath, [`--user-data-dir=${profileDir}`, "--new-window", FLOW_URL], { detached: true, stdio: "ignore" }); rv.unref(); } catch {}
+    if (process.platform === "darwin") { try { _spawnFlow("open", ["-a", "Google Chrome"], { detached: true, stdio: "ignore" }).unref(); } catch {} }
+    return res.json({ ok: true, already: true, slot, port: flowCdpPort(slot) });
+  }
+  try {
+    const proc = _spawnFlow(chromePath, [
+      `--remote-debugging-port=${flowCdpPort(slot)}`, "--remote-allow-origins=*",
+      `--user-data-dir=${profileDir}`, "--no-first-run", "--no-default-browser-check",
+      "--disable-features=Translate", "--new-window", FLOW_URL,
+    ], { detached: true, stdio: "ignore" });
+    proc.unref(); flowChromeProcs[slot] = proc;
+  } catch (e: any) { return res.status(500).json({ ok: false, error: "크롬 실행 실패: " + e.message }); }
+  for (let i = 0; i < 20; i++) {
+    await new Promise(r => setTimeout(r, 1000));
+    if (await flowChromeHealthy(slot)) return res.json({ ok: true, launched: true, slot, port: flowCdpPort(slot) });
+  }
+  res.status(504).json({ ok: false, error: "크롬은 떴지만 준비 확인 실패. 잠시 후 다시 시도하세요." });
+});
+
 /* ── 직접 발행 (앱에서 즉시 발행) ── */
 app.post("/api/publish-full", async (req, res) => {
   const { userId, platform, naverId, title, content, pubScope = "full", tags = [], imageUrl, categoryId, visibility, scheduleTime, blocks,
@@ -184,6 +247,7 @@ app.post("/api/publish-full", async (req, res) => {
     releaseSlot();
     return res.status(409).json({ error: `같은 네이버 계정에서 '${accountLock.owner}' 작업이 진행 중이에요. 완료 후 다시 시도해주세요.`, code: "ACCOUNT_BUSY" });
   }
+  let _publishShots: { caption: string; dataUrl: string }[] = [];
   try {
     let finalBlocks = blocks || [];
 
@@ -245,7 +309,9 @@ app.post("/api/publish-full", async (req, res) => {
         if (!ok) console.log(`[publish] 계정 세션 없음: ${naverId}`);
         else console.log(`[publish] 계정 세션 활성화: ${naverId}${editBlogId ? ` (글 주인 blogId=${editBlogId})` : ""}`);
       }
-      postUrl = await publishNaver({ userId, title, content, pubScope, tags, imageUrl, categoryId, visibility, scheduleTime, blocks: finalBlocks, videoUrl, videoPosition, editLogNo, editBlogId, signal: publishAbort.signal });
+      const _shots: { caption: string; dataUrl: string }[] = [];
+      postUrl = await publishNaver({ userId, title, content, pubScope, tags, imageUrl, categoryId, visibility, scheduleTime, blocks: finalBlocks, videoUrl, videoPosition, editLogNo, editBlogId, showWindow: req.body.showWindow === true || req.body.showWindow === "true", onShot: (caption, dataUrl) => { _shots.push({ caption, dataUrl }); }, signal: publishAbort.signal });
+      _publishShots = _shots;
     } else if (platform === "tistory") {
       postUrl = await publishTistory({ userId, title, content, tags, categoryId, visibility });
     } else {
@@ -254,7 +320,7 @@ app.post("/api/publish-full", async (req, res) => {
 
     // 발행기록 저장은 앱(회원 DashboardPage / 관리자 AdminPage)이 content까지 통째로 전담한다.
     // 여기서 또 저장하면 content 없는 중복 기록이 생겨(이중저장) 그 기록을 재발행하면 "제목만" 복원된다.
-    res.json({ success: true, postUrl });
+    res.json({ success: true, postUrl, shots: _publishShots });
   } catch (e: any) {
     // 실패 기록도 앱이 저장(이중저장 방지)
     if (publishAbort.signal.aborted || res.destroyed) return;
@@ -496,7 +562,7 @@ app.post("/api/flow-generate", async (req, res) => {
     const images = await generateFlowImagesCDP({
       prompts,
       captions: Array.isArray(captions) ? captions : [],
-      cdpPort: (typeof cdpPort === "number" && cdpPort >= 9222 && cdpPort <= 9299) ? cdpPort : 9222,   // 슬롯별 포트
+      cdpPort: (typeof cdpPort === "number" && cdpPort >= 9322 && cdpPort <= 9399) ? cdpPort : 9322,   // 골든시드 슬롯별 포트(9322+)
       onLog: (m) => console.log(m),
     });
     if (images.length === 0) {

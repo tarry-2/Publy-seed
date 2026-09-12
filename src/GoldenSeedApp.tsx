@@ -106,7 +106,7 @@ export default function GoldenSeedApp({ user, onLogout, onAdminLogin, theme, onT
   const onLogoTap = () => {
     logoTap.current += 1;
     if (logoTimer.current) clearTimeout(logoTimer.current);
-    if (logoTap.current >= 5) { logoTap.current = 0; onAdminLogin(); return; }
+    if (logoTap.current >= 7) { logoTap.current = 0; onAdminLogin(); return; }
     logoTimer.current = setTimeout(() => { logoTap.current = 0; }, 1400);
   };
 

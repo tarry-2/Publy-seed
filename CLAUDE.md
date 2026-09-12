@@ -1,5 +1,12 @@
 # 🌱 골든시드(GoldenSeed) 작업 규약 — 시작 전 반드시 읽는다
 
+## 🚨🚨 절대 착각 금지 — 진짜 관리자 위치 (2026-09-12 테리 대노, 수시간 사고)
+- **골든시드 진짜 관리자 = `public/admin/index.html`** (웹, seed.blogautopro.com, 탭3개: 주문승인·회원관리·발급·연장). 관리자 기능은 **무조건 여기에** 넣는다.
+- **`src/pages/AdminPage.tsx` = 퍼블리/트래픽에서 딸려온 껍데기(골든시드 안 씀). 여기 넣으면 안 됨.** "관리자=AdminPage.tsx"로 착각하면 대형 사고.
+  - ⚠️ **단 하나의 예외(2026-09-12 테리 확정) = 🌱계정농사 컨트롤타워.** AdminPage(로고7탭→관리자로그인, `view="admin"`)에만 새 탭으로 넣는다. 이유: gs_accounts는 **관리자 토큰**(`publy_admin_token`, gs_seed_list RPC)으로만 읽히고, 발행 봇(naver-bot 3363)은 **앱에만** 있으며(웹 관리자는 브라우저라 봇 불가), 원터치 엔진(`runOneTouch`)도 AdminPage에 이미 있음 → "봇+관리자토큰+원터치" 3박자가 여기만 모임. **테리 전용(회원·다른 곳엔 안 보임). 엄청 디테일하게.** 컨트롤타워 본체는 별도 컴포넌트 `src/components/SeedFarmTower.tsx`로 분리(7220줄 AdminPage 비대화 방지).
+- **`src/`(GoldenSeedApp) = 회원용 시딩 콘솔** (설치형 Electron 앱). 관리자 아님.
+- **일 시작 첫 행동 = 메모리 `project_goldenseed.md` Read.** 코드 grep보다 먼저. 안 읽고 시작 = 규칙 위반·기만. (테리: "메모리 무조건 보고 일하라니깐 왜 어겨")
+
 > 이 파일은 매 세션 자동 로드된다. 골든시드는 **유튜브/인스타/페북 골든아워(초기 30분) 초기시딩 엔진**이다.
 > 트래픽/퍼블리(publy-traffic) 포크로 시작했고, 검증된 봇 뼈대(playwright·프록시·세션·격리·AI)를 재활용한다.
 > 상세 설계·로직은 메모리 `project_goldenseed.md` + 바탕화면 `골든시드_설계도_2026-09-10.md`.

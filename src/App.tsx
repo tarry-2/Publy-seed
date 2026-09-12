@@ -1,8 +1,5 @@
 import React, { useState, useEffect } from "react";
 import LoginPage from "./pages/LoginPage";
-import AdminLoginPage from "./pages/AdminLoginPage";
-import AdminPageRaw from "./pages/AdminPage";
-const AdminPage = AdminPageRaw as React.ComponentType<any>;
 import GoldenSeedApp from "./GoldenSeedApp";
 import { PublyUser, refreshUserById, touchLastSeen, logoutServerSession, verifyAdminSession, clearAdminSession, getMemberSessionToken, isThisDeviceActive } from "./lib/supabase";
 
@@ -33,6 +30,7 @@ declare global {
 
 export default function App() {
   const [view, setView]   = useState<View>("login");
+  const [adminFrameKey, setAdminFrameKey] = useState<number>(Date.now());   // 관리자 iframe 캐시버스터
   const [user, setUser]   = useState<PublyUser | null>(null);
   const [theme, setTheme] = useState<"dark"|"light">(() =>
     (localStorage.getItem("publy_theme") as any) || "light"  // 최초 실행은 라이트 고정(로그인·회원대시보드)
@@ -174,22 +172,22 @@ export default function App() {
     />
   );
 
-  if (view==="admin-login") return (
-    <AdminLoginPage
-      onAdminAuth={handleAdminAuth}
-      onBack={() => setView("login")}
-      theme={theme}
-      onThemeToggle={toggleTheme}
-    />
-  );
-
-  if (view==="admin") return (
-    <AdminPage
-      onBack={handleAdminLogout}
-      onDashboard={() => { if(user) setView("dashboard"); else setView("login"); }}
-      theme={theme}
-      onThemeToggle={toggleTheme}
-    />
+  // 🌱 로고 7번 탭 → 골든시드 관리자(public/admin/index.html)를 그대로 띄운다.
+  //   골든시드 관리자 자체가 로그인+대시보드(주문승인·회원관리·발급·계정농사 컨트롤타워)를 다 가짐.
+  //   ※ /admin/ 는 앱 라우팅이 가로채므로 반드시 /admin/index.html 로 로드.
+  if (view==="admin-login" || view==="admin") return (
+    <div style={{ width:"100vw", height:"100vh", position:"relative" }}>
+      {/* 캐시버스터(?t) — 진입/새로고침마다 최신 index.html 강제 로드(iframe 캐시로 옛 화면 뜨는 것 방지) */}
+      <iframe id="gs-admin-frame" src={`/admin/index.html?t=${adminFrameKey}`} title="골든시드 관리자" style={{ width:"100%", height:"100%", border:"none" }} />
+      <div style={{ position:"fixed", top:10, left:84, zIndex:9999, display:"flex", gap:6 }}>
+        <button onClick={() => setView("dashboard")}
+          style={{ padding:"6px 12px", borderRadius:8, border:"1px solid rgba(0,0,0,.15)", background:"rgba(255,255,255,.9)", color:"#333", fontSize:12, fontWeight:700, cursor:"pointer" }}
+        >← 회원 화면</button>
+        <button onClick={() => setAdminFrameKey(Date.now())}
+          style={{ padding:"6px 12px", borderRadius:8, border:"1px solid rgba(0,0,0,.15)", background:"rgba(255,255,255,.9)", color:"#333", fontSize:12, fontWeight:700, cursor:"pointer" }}
+        >🔄 최신 반영</button>
+      </div>
+    </div>
   );
 
   // 🌱 골든시드 = 로그인 후 시딩 콘솔 셸(GoldenSeedApp)만 렌더.
