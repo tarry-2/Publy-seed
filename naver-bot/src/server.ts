@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { chromium } from "playwright";
 import fs from "fs";
 import path from "path";
 import { saveNaverSession, publishNaver, activateNaverAccount, naverSessionExists, generateFlowImages, generateFlowImagesCDP, getNaverCategories, saveGoogleSession, googleSessionExists, deleteNaverSession, deleteGoogleSession } from "./naver";
@@ -221,6 +222,27 @@ app.post("/api/flow/launch", async (req, res) => {
   res.status(504).json({ ok: false, error: "크롬은 떴지만 준비 확인 실패. 잠시 후 다시 시도하세요." });
 });
 
+/* ── 🌐 프록시 검사 — 그 프록시로 실제 접속해 나가는 IP·응답시간 확인 ── */
+app.post("/api/proxy/check", async (req, res) => {
+  const { server, username, password } = req.body || {};
+  if (!server) return res.status(400).json({ ok: false, error: "server 필요" });
+  const srv = /^(https?|socks[45]?):\/\//i.test(server) ? server : `http://${server}`;
+  const t0 = Date.now();
+  let browser: any = null;
+  try {
+    browser = await chromium.launch({ headless: true, proxy: { server: srv, username: username || undefined, password: password || undefined } });
+    const page = await browser.newPage();
+    await page.goto("https://api.ipify.org?format=json", { timeout: 15000, waitUntil: "domcontentloaded" });
+    const txt = await page.evaluate(() => document.body.innerText);
+    const ip = (() => { try { return JSON.parse(txt).ip; } catch { return txt.trim(); } })();
+    await browser.close();
+    res.json({ ok: true, ip, ms: Date.now() - t0 });
+  } catch (e: any) {
+    try { if (browser) await browser.close(); } catch {}
+    res.json({ ok: false, error: e?.message || "접속 실패", ms: Date.now() - t0 });
+  }
+});
+
 /* ── 직접 발행 (앱에서 즉시 발행) ── */
 app.post("/api/publish-full", async (req, res) => {
   const { userId, platform, naverId, title, content, pubScope = "full", tags = [], imageUrl, categoryId, visibility, scheduleTime, blocks,
@@ -310,7 +332,7 @@ app.post("/api/publish-full", async (req, res) => {
         else console.log(`[publish] 계정 세션 활성화: ${naverId}${editBlogId ? ` (글 주인 blogId=${editBlogId})` : ""}`);
       }
       const _shots: { caption: string; dataUrl: string }[] = [];
-      postUrl = await publishNaver({ userId, title, content, pubScope, tags, imageUrl, categoryId, visibility, scheduleTime, blocks: finalBlocks, videoUrl, videoPosition, editLogNo, editBlogId, showWindow: req.body.showWindow === true || req.body.showWindow === "true", onShot: (caption, dataUrl) => { _shots.push({ caption, dataUrl }); }, signal: publishAbort.signal });
+      postUrl = await publishNaver({ userId, title, content, pubScope, tags, imageUrl, categoryId, visibility, scheduleTime, blocks: finalBlocks, videoUrl, videoPosition, editLogNo, editBlogId, showWindow: req.body.showWindow === true || req.body.showWindow === "true", useProxy: req.body.useProxy === true || req.body.useProxy === "true", onShot: (caption, dataUrl) => { _shots.push({ caption, dataUrl }); }, signal: publishAbort.signal });
       _publishShots = _shots;
     } else if (platform === "tistory") {
       postUrl = await publishTistory({ userId, title, content, tags, categoryId, visibility });

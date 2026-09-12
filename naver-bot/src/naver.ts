@@ -1,4 +1,5 @@
 import { chromium, BrowserContext, Frame, Page } from "playwright";
+import { getProxyForNationality, stickifyDataImpulse, maskProxy } from "./proxy";
 import fs from "fs";
 import https from "https";
 import http from "http";
@@ -418,9 +419,10 @@ export async function publishNaver(params: {
   editBlogId?: string;  // ★글 살리기 원문 소유 blogId. 활성 세션의 실제 blogId와 다르면 원본 변경 전 안전중단.
   showWindow?: boolean; // 🪟 창 보기: true면 실제 크롬 창을 띄워 봇 움직임을 눈으로 봄. false(기본)면 백그라운드(headless).
   onShot?: (caption: string, dataUrl: string) => void;   // 📸 단계별 화면 캡처 콜백(로그에 이미지로 표시)
+  useProxy?: boolean;   // 🌐 프록시 경유(계정농사=연좌제 밴 방지). true면 gs_proxies에서 한국 IP 배정.
   signal?: AbortSignal;
 }): Promise<string> {
-  const { userId, title: rawTitle, content, pubScope = "full", tags, imageUrl, categoryId, visibility = "public", scheduleTime, blocks, videoUrl, videoPosition = "middle", editLogNo, editBlogId, showWindow = false, onShot, signal } = params;
+  const { userId, title: rawTitle, content, pubScope = "full", tags, imageUrl, categoryId, visibility = "public", scheduleTime, blocks, videoUrl, videoPosition = "middle", editLogNo, editBlogId, showWindow = false, onShot, useProxy = false, signal } = params;
   if (signal?.aborted) throw new Error("발행이 취소됐습니다");
   const isEdit = !!(editLogNo && /^\d+$/.test(String(editLogNo)));   // 글 살리기(덮어쓰기) 모드
   const title = rawTitle.replace(/\n/g, " ").trim().slice(0, 40);
@@ -477,8 +479,17 @@ export async function publishNaver(params: {
   }
 
   let closingExpected = false;
+  // 🌐 프록시(계정농사 밴 방지) — 계정마다 다른 한국 IP. gs_proxies 재사용(youtube-bot 로직). DataImpulse면 방문당 sticky.
+  let proxyOpt: { server: string; username?: string; password?: string } | undefined = undefined;
+  if (useProxy) {
+    try {
+      const p = stickifyDataImpulse(await getProxyForNationality("kr"));
+      if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; console.log(`[naver] 🌐 프록시 경유: ${maskProxy(p)}`); }
+      else console.log(`[naver] 🌐 프록시 미배정 — 내 IP로 발행(gs_proxies 등록 필요)`);
+    } catch (e: any) { console.log(`[naver] 🌐 프록시 조회 실패(${e?.message}) — 내 IP로 발행`); }
+  }
   // 🪟 창 보기 ON=실제 창 뜸 / OFF=백그라운드(headless). 백그라운드여도 onShot으로 진행 캡처를 로그에 보냄.
-  const browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 50 : 0 });
+  const browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 50 : 0, proxy: proxyOpt });
   const abortPublish = () => {
     closingExpected = true;
     void browser.close().catch(() => {});

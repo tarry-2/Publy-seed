@@ -378,12 +378,24 @@
             <!-- ── 🌐 프록시 탭 (준비 중) ── -->
             <div class="tw-tabpane" data-twpane="proxy" style="display:none">
               <div class="tw-panel">
-                <div class="tw-panel-h">🌐 프록시 배정</div>
-                <div class="muted" style="font-size:12px;line-height:1.7">계정마다 다른 IP로 연좌제 밴을 막아요.<br><br>
-                  • 계정↔프록시 배정<br>
-                  • IP 상태 점검<br><br>
-                  <span style="color:var(--gold);font-weight:700">🚧 다음 단계에서 제작</span>
+                <div class="tw-panel-h">🌐 프록시 <span class="muted" style="font-weight:600">— 계정마다 다른 한국 IP(연좌제 밴 방지)</span></div>
+                <!-- 발행 시 프록시 사용 토글 -->
+                <button class="btn sm" id="twUseProxy" style="width:100%;margin-bottom:8px">🌐 발행 시 프록시 사용 OFF</button>
+                <div class="muted" style="font-size:11px;line-height:1.5;margin-bottom:12px;padding:8px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--line)">켜면 각 계정 발행이 <b>한국 프록시 IP</b>를 경유해요(gs_proxies에서 부하분산 자동 배정). 계정 수백~수천 개면 <b>필수</b>(같은 IP=연좌제 밴).</div>
+                <!-- 프록시 등록 -->
+                <div style="font-size:12px;font-weight:800;margin-bottom:6px">➕ 프록시 등록</div>
+                <input id="pxHost" placeholder="주소:포트 (예: gw.dataimpulse.com:823)" style="width:100%;box-sizing:border-box;font-size:12px;padding:8px 10px;margin-bottom:6px" />
+                <div style="display:flex;gap:6px;margin-bottom:6px">
+                  <input id="pxUser" placeholder="아이디" style="flex:1;min-width:0;font-size:12px;padding:8px 10px" />
+                  <input id="pxPass" placeholder="비번" style="flex:1;min-width:0;font-size:12px;padding:8px 10px" />
                 </div>
+                <div style="display:flex;gap:6px;margin-bottom:12px">
+                  <input id="pxLabel" placeholder="별명(선택)" style="flex:1;min-width:0;font-size:12px;padding:8px 10px" />
+                  <button class="btn gold sm" id="pxAdd">등록</button>
+                </div>
+                <!-- 프록시 목록 -->
+                <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px"><span style="font-size:12px;font-weight:800">📋 등록된 프록시</span><button class="btn sm" id="pxReload" style="margin-left:auto">🔄</button></div>
+                <div id="pxList" style="display:flex;flex-direction:column;gap:6px"><div class="muted" style="font-size:11px">불러오는 중…</div></div>
               </div>
             </div>
 
@@ -849,6 +861,43 @@
   });
   $('twGemToggle').onclick=()=>{ const b=$('twGemBody'),a=$('twGemArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twGemTag').textContent=o?'▶ 펴기':'▼ 접기'; };
   $('twFlowToggle').onclick=()=>{ const b=$('twFlowBody'),a=$('twFlowArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twFlowTag').textContent=o?'▶ 펴기':'▼ 접기'; };
+  // ── 🌐 프록시 (gs_proxies 직접 — 회원앱 봇도 anon으로 읽는 테이블) ──
+  let twUseProxy=false;
+  $('twUseProxy').onclick=()=>{ twUseProxy=!twUseProxy; const b=$('twUseProxy'); b.textContent='🌐 발행 시 프록시 사용 '+(twUseProxy?'ON':'OFF'); b.classList.toggle('gold',twUseProxy); };
+  async function pxLoad(){
+    const box=$('pxList');
+    const {data,error}=await sb.rpc('gs_proxy_list',{p_token:TOKEN});
+    if(error){ box.innerHTML='<div class="muted" style="font-size:11px">오류: '+error.message+'</div>'; return; }
+    if(!data||!data.length){ box.innerHTML='<div class="muted" style="font-size:11px">등록된 프록시가 없어요. 위에서 등록하세요(없으면 내 IP로 발행).</div>'; return; }
+    box.innerHTML=data.map(p=>{
+      const st=p.status==='active'?['🟢',(p.country||'KR')]:['🔴',p.status];
+      return '<div style="display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:11.5px">'
+        +'<span>'+st[0]+'</span>'
+        +'<div style="flex:1;min-width:0"><b>'+(p.label||p.host)+'</b> <span class="muted">'+p.host+':'+p.port+' · '+st[1]+'</span><div id="pxr_'+p.id+'" class="muted" style="font-size:10.5px"></div></div>'
+        +'<button class="btn sm" data-pxcheck="'+p.id+'">🔍</button>'
+        +'<button class="btn danger sm" data-pxdel="'+p.id+'">🗑</button></div>';
+    }).join('');
+    box.querySelectorAll('[data-pxcheck]').forEach(b=>b.onclick=async()=>{
+      const p=data.find(x=>x.id===b.dataset.pxcheck); if(!p)return; const out=$('pxr_'+p.id); out.textContent='검사 중…'; b.disabled=true;
+      try{ const r=await fetch(BOT+'/api/proxy/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({server:p.host+':'+p.port,username:p.username,password:p.password})}); const d=await r.json();
+        if(d.ok){ out.innerHTML='<span style="color:#4ade80">✅ IP '+d.ip+' · '+d.ms+'ms</span>'; await sb.rpc('gs_proxy_set_status',{p_token:TOKEN,p_id:p.id,p_status:'active'}); }
+        else { out.innerHTML='<span style="color:#f87171">❌ '+(d.error||'실패')+'</span>'; await sb.rpc('gs_proxy_set_status',{p_token:TOKEN,p_id:p.id,p_status:'dead'}); }
+      }catch(e){ out.innerHTML='<span style="color:#f87171">❌ 봇 응답없음(앱 실행?)</span>'; }
+      b.disabled=false;
+    });
+    box.querySelectorAll('[data-pxdel]').forEach(b=>b.onclick=async()=>{ if(!confirm('이 프록시를 삭제할까요?'))return; await sb.rpc('gs_proxy_delete',{p_token:TOKEN,p_id:b.dataset.pxdel}); pxLoad(); });
+  }
+  $('pxAdd').onclick=async()=>{
+    const hp=$('pxHost').value.trim(); if(!hp){ alert('주소:포트를 입력하세요'); return; }
+    const m=hp.replace(/^https?:\/\//,'').split(':'); const host=m[0], port=parseInt(m[1]||'0')||0;
+    if(!host||!port){ alert('주소:포트 형식이 올바르지 않아요 (예: gw.dataimpulse.com:823)'); return; }
+    const {error}=await sb.rpc('gs_proxy_insert',{p_token:TOKEN,p_data:{label:$('pxLabel').value.trim(),host,port,username:$('pxUser').value.trim(),password:$('pxPass').value.trim(),country:'KR',status:'active'}});
+    if(error){ alert('등록 실패: '+error.message); return; }
+    ['pxHost','pxUser','pxPass','pxLabel'].forEach(id=>$(id).value=''); pxLoad();
+  };
+  $('pxReload').onclick=pxLoad;
+  pxLoad();
+
   // 💬 인사말 (localStorage 저장 + 상태)
   function twGreetSync(){ $('twGreetState').textContent=($('twGreet').value.trim()?'✅ 있음':''); }
   (function(){ $('twGreet').value=localStorage.getItem('gs_tw_greeting')||''; twGreetSync(); })();
@@ -1116,7 +1165,7 @@
     for(const u of twLinkList){ if(u) blocks.push({type:'text',content:u}); }   // 🔗 링크 맨끝
     // 5) 발행
     twPush('🚀 네이버 발행 중…',C.pub);
-    const payload={userId,platform:'naver',title:twPost.title,content:twPost.content,naverId:acc.login,pubScope:'full',tags:twPost.tags.split(',').map(t=>t.replace('#','').trim()).filter(Boolean),imageUrl:imgs[0]||undefined,categoryId:cat.id||undefined,visibility:'public',blocks,showWindow:twShowWin};
+    const payload={userId,platform:'naver',title:twPost.title,content:twPost.content,naverId:acc.login,pubScope:'full',tags:twPost.tags.split(',').map(t=>t.replace('#','').trim()).filter(Boolean),imageUrl:imgs[0]||undefined,categoryId:cat.id||undefined,visibility:'public',blocks,showWindow:twShowWin,useProxy:twUseProxy};
     const r=await fetch(BOT+'/api/publish-full',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const d=await r.json().catch(()=>({}));
     if(Array.isArray(d.shots)) d.shots.forEach(s=>twShot(s.caption||'발행 화면',s.dataUrl));   // 📸 진행 캡처 로그에
