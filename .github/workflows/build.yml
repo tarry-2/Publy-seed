@@ -39,6 +39,24 @@ jobs:
         env:
           NODE_PATH: ../youtube-bot/node_modules
 
+      - name: Install naver-bot dependencies
+        working-directory: naver-bot
+        run: npm install
+
+      - name: Bundle naver-bot (esbuild)
+        working-directory: naver-bot
+        run: npx esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --external:playwright --external:patchright
+
+      - name: Install neighbor-bot dependencies
+        working-directory: neighbor-bot
+        run: npm install
+
+      - name: Bundle neighbor-bot (esbuild)
+        working-directory: neighbor-bot
+        run: npx esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --external:playwright
+        env:
+          NODE_PATH: ../naver-bot/node_modules
+
       - name: Install Playwright Chromium (youtube-bot)
         working-directory: youtube-bot
         run: npx playwright install chromium
@@ -125,6 +143,24 @@ jobs:
         run: npx esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --external:playwright
         env:
           NODE_PATH: ../youtube-bot/node_modules
+
+      - name: Install naver-bot dependencies
+        working-directory: naver-bot
+        run: npm install
+
+      - name: Bundle naver-bot (esbuild)
+        working-directory: naver-bot
+        run: npx esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --external:playwright --external:patchright
+
+      - name: Install neighbor-bot dependencies
+        working-directory: neighbor-bot
+        run: npm install
+
+      - name: Bundle neighbor-bot (esbuild)
+        working-directory: neighbor-bot
+        run: npx esbuild src/server.ts --bundle --platform=node --target=node20 --outfile=dist/server.js --external:playwright
+        env:
+          NODE_PATH: ../naver-bot/node_modules
 
       - name: Install Playwright Chromium (youtube-bot)
         working-directory: youtube-bot

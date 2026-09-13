@@ -142,10 +142,22 @@ async function downloadImageToTemp(url: string): Promise<string | null> {
 }
 
 /* ── 네이버 로그인 + blogId 추출 ── */
+// 🔴 계정별 고정 프록시(처음 IP 유지) — 계정 세션으로 창 여는 모든 곳에 통일 적용.
+//    테리 불가침: 같은 계정=항상 같은 한국 IP, 다른 계정=다른 IP. 맨IP로 계정 열면 연좌제 밴.
+//    sessid = 계정 저장값(proxySessid) 우선, 없으면 "gs"+userId 결정론적(같은 계정이면 항상 같은 IP 재현).
+async function accountProxyOpt(userId: string, session?: any): Promise<{ server: string; username?: string; password?: string } | undefined> {
+  const accSessid = (session?.proxySessid && String(session.proxySessid).trim()) || ("gs" + String(userId).toLowerCase().replace(/[^a-z0-9]/g, ""));
+  try { const p = stickifyDataImpulse(await getProxyForNationality("kr"), accSessid); if (p?.server) return { server: p.server, username: p.username, password: p.password }; } catch {}
+  return undefined;
+}
+
 export async function saveNaverSession(
   userId: string, id: string, pw: string
 ): Promise<{ blogId: string }> {
-  const browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS, slowMo: 50 });
+  const _proxyOpt = await accountProxyOpt(userId);
+  if (_proxyOpt) console.log(`[naver] 🌐 로그인 프록시(계정고정) ${maskProxy(_proxyOpt as any)}`);
+  else console.log("[naver] ⚠️ 프록시 없음 — 계정 위험(맨IP 로그인). 관리자 🌐프록시 등록 필요");
+  const browser = await chromium.launch({ headless: false, args: LAUNCH_ARGS, slowMo: 50, proxy: _proxyOpt });
   const context = await browser.newContext({
     userAgent: UA, viewport: { width: 1280, height: 800 },
     locale: "ko-KR", timezoneId: "Asia/Seoul",
@@ -251,7 +263,11 @@ export async function reloginNaverSilent(userId: string, visible = false): Promi
   if (session.pw) { try { pw = Buffer.from(session.pw, "base64").toString("utf-8"); } catch {} }
   if (!pw) { console.log("[naver] 자동재로그인 실패: 저장된 비밀번호 없음"); return false; }
 
-  const browser = await chromium.launch({ headless: !visible, args: visible ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS });
+  // ★재로그인도 반드시 계정 고정 IP — 프로필/발행은 프록시로 열었는데 여기서 맨IP로 재로그인하면 IP가 튀어 밴.
+  const _proxyOpt = await accountProxyOpt(userId, session);
+  if (_proxyOpt) console.log(`[naver] 🌐 재로그인 프록시(계정고정) ${maskProxy(_proxyOpt as any)}`);
+  else console.log("[naver] ⚠️ 재로그인 프록시 없음 — 계정 위험(맨IP)");
+  const browser = await chromium.launch({ headless: !visible, args: visible ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, proxy: _proxyOpt });
   const context = await browser.newContext({ userAgent: UA, viewport: { width: 1280, height: 800 }, locale: "ko-KR", timezoneId: "Asia/Seoul" });
   await applyAntiDetection(context);
   try { if (Array.isArray(session.cookies) && session.cookies.length) await context.addCookies(session.cookies); } catch {}
@@ -543,8 +559,10 @@ export async function getNaverCategories(
   userId: string
 ): Promise<{ id: string; name: string }[]> {
   if (!naverSessionExists(userId)) throw new Error("네이버 세션 없음");
-  const { blogId, cookies } = readSession<any>(naverSessionName(userId), LEGACY_SESSION_DIRS);
-  const browser = await chromium.launch({ headless: true, args: LAUNCH_ARGS });
+  const _session = readSession<any>(naverSessionName(userId), LEGACY_SESSION_DIRS);
+  const { blogId, cookies } = _session;
+  const _proxyOpt = await accountProxyOpt(userId, _session);   // ★계정 세션 접속 = 고정 IP 유지(맨IP 금지)
+  const browser = await chromium.launch({ headless: true, args: LAUNCH_ARGS, proxy: _proxyOpt });
   const context = await browser.newContext({
     userAgent: UA, viewport: { width: 1280, height: 800 },
     locale: "ko-KR", timezoneId: "Asia/Seoul",

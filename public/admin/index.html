@@ -76,7 +76,7 @@
 </style>
 </head>
 <body>
-<script>try{if(sessionStorage.getItem('gs_admin_token'))document.write('<style>#gate{display:none!important}</style>');}catch(e){}</script>
+<script>try{if(localStorage.getItem('gs_admin_token'))document.write('<style>#gate{display:none!important}</style>');}catch(e){}</script>
 
 <!-- 로그인 게이트 -->
 <div id="gate">
@@ -479,6 +479,10 @@
             </div>
             <div class="muted" style="font-size:10.5px;margin-top:4px">※ 주소는 개설하면 <b style="color:var(--gold)">변경 불가</b>. 비워두면 개설 시 자연스러운 주소를 자동으로 만들어요(권장). <b>네이버 아이디·개인정보 포함 주소는 네이버가 막아요.</b></div>
           </div>
+          <div style="margin-top:8px">
+            <input id="sfProxySessid" placeholder="🌐 프록시 sessid(가입 때 쓴 고정IP · 비우면 자동)" style="width:100%" />
+            <div class="muted" style="font-size:10.5px;margin-top:4px">※ 이 계정 전용 <b style="color:var(--gold)">고정 IP</b>. 가입창에서 발급된 sessid를 넣으면 로그인·발행이 <b>항상 같은 IP</b>로 나가요(연좌제 밴 방지). 비우면 <code>gs</code>+아이디로 자동 고정.</div>
+          </div>
           <!-- 🪪 프로필 육성: 빈 계정=봇티, 채워야 노출·생존 -->
           <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
             <div class="muted" style="margin-bottom:8px">🪪 블로그 프로필 (계정마다 다르게 채워야 봇티 안 나고 검색 노출·생존에 유리)</div>
@@ -591,7 +595,7 @@
     $('err').textContent='확인 중…';
     const r=await login(pw);
     if(!r.ok){ $('err').textContent=r.msg; return; }
-    TOKEN=r.token; try{sessionStorage.setItem('gs_admin_token',TOKEN);}catch(e){}
+    TOKEN=r.token; try{localStorage.setItem('gs_admin_token',TOKEN);}catch(e){}
     $('err').textContent=''; openApp();
   }
   $('loginBtn').onclick=tryLogin;
@@ -603,14 +607,14 @@
 
   // 세션 자동 로그인(토큰 검증)
   (async()=>{
-    try{ const t=sessionStorage.getItem('gs_admin_token');
+    try{ const t=localStorage.getItem('gs_admin_token');
       if(t){ const {data}=await sb.rpc('publy_admin_session_get',{p_token:t});
-        if(data===true){ TOKEN=t; openApp(); return; } sessionStorage.removeItem('gs_admin_token'); }
+        if(data===true){ TOKEN=t; openApp(); return; } localStorage.removeItem('gs_admin_token'); }
     }catch(e){}
     $('gate').style.setProperty('display','flex','important'); $('pw').focus();
   })();
 
-  $('logout').onclick=()=>{ try{sessionStorage.removeItem('gs_admin_token');}catch(e){} location.reload(); };
+  $('logout').onclick=()=>{ try{localStorage.removeItem('gs_admin_token');}catch(e){} location.reload(); };
 
   // ── 탭 전환 ──
   document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
@@ -768,7 +772,7 @@
   });
   function seedResetForm(){
     seedEditId=null; $('seedFormTitle').textContent='새 계정 등록'; $('sfMsg').textContent='';
-    ['sfLogin','sfPassword','sfPhone','sfKeyword','sfBlogName','sfBlogDomain','sfDisplayName','sfProfileImage','sfBio'].forEach(id=>$(id).value='');
+    ['sfLogin','sfPassword','sfPhone','sfKeyword','sfBlogName','sfBlogDomain','sfProxySessid','sfDisplayName','sfProfileImage','sfBio'].forEach(id=>$(id).value='');
     seedSyncPreview();
   }
   // 프로필 사진 URL 미리보기(입력 즉시 반영)
@@ -818,6 +822,7 @@
     const data={login,password:$('sfPassword').value.trim(),phone_used:$('sfPhone').value.trim(),
       target_keyword:$('sfKeyword').value.trim(),blog_name:$('sfBlogName').value.trim(),
       blog_domain:$('sfBlogDomain').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g,''),
+      proxy_sessid:$('sfProxySessid').value.trim(),
       display_name:$('sfDisplayName').value.trim(),profile_image_url:$('sfProfileImage').value.trim(),bio:$('sfBio').value.trim()};
     let error;
     if(seedEditId){
@@ -873,6 +878,7 @@
           (r.target_keyword?'🎯 '+r.target_keyword+' · ':'')+'🌱 워밍 '+(r.warmup_day||0)+'일 · 📝 '+(r.post_count||0)+' · 🤝 '+(r.neighbor_count||0)+
           (r.health_note?' · <span style="color:var(--danger)">⚠️ '+r.health_note+'</span>':'')+'</div>'+
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'+nexts+
+          '<button class="btn sm" data-seedopen="'+r.login+'" data-sessid="'+(r.proxy_sessid||'')+'" title="이 계정 전용 IP로 로그인된 크롬을 엽니다. 창에서 뭘 하든 그 프록시로 나가요.">🖥️ 블로그 열기</button>'+
           '<button class="btn sm" data-seededit="'+r.id+'">✏️ 수정</button>'+
           '<button class="btn danger sm" data-seeddel="'+r.id+'" style="margin-left:auto">🗑</button></div>'+
       '</div>';
@@ -886,7 +892,7 @@
       seedEditId=r.id;
       $('sfLogin').value=r.login||''; $('sfPassword').value=r.password||'';
       $('sfPhone').value=r.phone_used||''; $('sfKeyword').value=r.target_keyword||''; $('sfBlogName').value=r.blog_name||'';
-      $('sfBlogDomain').value=r.blog_domain||'';
+      $('sfBlogDomain').value=r.blog_domain||''; $('sfProxySessid').value=r.proxy_sessid||'';
       $('sfDisplayName').value=r.display_name||''; $('sfProfileImage').value=r.profile_image_url||''; $('sfBio').value=r.bio||''; seedSyncPreview();
       $('seedFormTitle').textContent='✏️ 계정 수정 — '+r.login; $('sfMsg').textContent='';
       $('seedForm').style.display='block'; $('seedForm').scrollIntoView({behavior:'smooth',block:'center'});
@@ -895,6 +901,19 @@
       if(!confirm('이 계정을 목록에서 삭제할까요?'))return;
       const {error}=await sb.rpc('gs_seed_delete',{p_token:TOKEN,p_id:b.dataset.seeddel});
       if(error){alert('삭제 실패: '+error.message);return;} loadSeed();
+    });
+    // 🖥️ 블로그 열기 — 그 계정 전용 IP+로그인 세션으로 크롬 오픈(창에서 뭘 하든 그 프록시로 나감)
+    box.querySelectorAll('[data-seedopen]').forEach(b=>b.onclick=async()=>{
+      const login=b.dataset.seedopen, sessid=b.dataset.sessid||'';
+      const old=b.textContent; b.textContent='🖥️ 여는 중…'; b.disabled=true;
+      try{
+        const r=await fetch(BOT+'/api/account/open',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,proxySessid:sessid})});
+        const d=await r.json();
+        if(!d.ok){ alert('열기 실패: '+(d.error||'')); }
+        else if(d.already){ /* 이미 열려있어 앞으로 가져옴 */ }
+        else { alert('🖥️ '+login+' 창을 열었어요.\n나가는 IP: '+(d.outIp||'?')+'\n로그인: '+(d.loggedIn?'유지됨(바로 사용)':'필요(창에서 1번만 로그인하면 다음부턴 자동)')); }
+      }catch(e){ alert('봇 연결 실패(앱 실행 중인지 확인): '+e.message); }
+      b.textContent=old; b.disabled=false;
     });
   }
 

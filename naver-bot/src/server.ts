@@ -256,7 +256,10 @@ app.post("/api/signup/launch", async (req, res) => {
   // 다음 단계라 직접 진입하면 네이버가 404("페이지를 찾을 수 없습니다")를 준다. 그냥 /user2/join 이 정상 시작.
   const joinUrl = "https://nid.naver.com/user2/join";
   try {
-    const p = stickifyDataImpulse(await getProxyForNationality(nationality as any));
+    // ★가입 전용 고정 sessid 발급 = 이 계정의 "처음 IP". 응답으로 돌려줘 계정 등록 시 proxy_sessid로 저장하면
+    //   이후 로그인·개설·프로필·발행이 accountProxyOpt로 전부 이 sessid=같은 IP를 재현(처음 IP 평생 유지).
+    const signupSessid = "gs" + Math.random().toString(36).slice(2, 10);
+    const p = stickifyDataImpulse(await getProxyForNationality(nationality as any), signupSessid);
     if (!p || !p.server) return res.status(400).json({ ok: false, error: "프록시가 없어요. 관리자 🌐프록시 탭에서 먼저 등록/충전하세요. (프록시 없이 가입하면 대량생성으로 걸립니다)" });
     // ★스텔스 필수: 순정 chromium.launch는 navigator.webdriver=true·plugins=0·window.chrome없음으로 봇 노출
     //   → 네이버가 SMS 인증 발송을 막음(뱅글뱅글). patchright + 실제 크롬(channel:chrome) + persistent
@@ -279,10 +282,66 @@ app.post("/api/signup/launch", async (req, res) => {
     let outIp = "?";
     try { await page.goto("https://api.ipify.org?format=json", { timeout: 20000 }); outIp = (await page.evaluate(() => document.body.innerText).catch(() => "?")); } catch {}
     await page.goto(joinUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
-    console.log(`[가입창] 프록시 ${maskProxy(p)} · 나가는IP ${outIp}`);
-    return res.json({ ok: true, proxy: maskProxy(p), outIp });
+    console.log(`[가입창] 프록시 ${maskProxy(p)} · 나가는IP ${outIp} · sessid ${signupSessid}`);
+    return res.json({ ok: true, proxy: maskProxy(p), outIp, proxySessid: signupSessid });
   } catch (e: any) {
     return res.status(500).json({ ok: false, error: "가입 창 실행 실패: " + (e?.message || e) });
+  }
+});
+
+/* ── 🖥️ 계정 브라우저 열기 — 그 계정 전용 IP(proxy_sessid)+로그인 세션으로 크롬 열기 ──
+   관리자가 계정 하나 골라 "블로그 열기" 누르면 이 창이 뜬다. 창에서 뭘 하든(글쓰기·이웃·관리)
+   전부 그 계정 전용 프록시로 나감(계정마다 다른 고정 IP = 연좌제 밴 방지).
+   ★userDataDir를 계정별 고정으로 둬서 한 번 로그인하면 세션 유지(다음부턴 재로그인 불필요).
+   ★스텔스(patchright+실크롬): 네이버 자동화 감지 회피(가입창과 동일). */
+const accountBrowsers: Record<string, any> = {};
+app.post("/api/account/open", async (req, res) => {
+  const login = String(req.body?.login || "").trim();
+  const proxySessid = String(req.body?.proxySessid || "").trim();
+  const startUrl = String(req.body?.startUrl || "").trim();
+  if (!login) return res.status(400).json({ ok: false, error: "login(계정 아이디) 필요" });
+  try {
+    // 계정 전용 고정 sessid: 전달값 우선, 없으면 SQL 자동발급 규칙(gs+login)과 동일 재현 → 항상 같은 IP
+    const sessid = proxySessid || ("gs" + login.toLowerCase().replace(/[^a-z0-9]/g, ""));
+    const p = stickifyDataImpulse(await getProxyForNationality("kr"), sessid);
+    if (!p || !p.server) return res.status(400).json({ ok: false, error: "프록시가 없어요. 🌐프록시 탭에서 먼저 등록하세요. (프록시 없이 접속하면 계정 위험)" });
+
+    // 이미 열려 있으면 그 창을 앞으로(중복 실행 방지)
+    if (accountBrowsers[login]) {
+      try { const pg = accountBrowsers[login].pages()[0]; if (pg) { await pg.bringToFront(); return res.json({ ok: true, already: true, proxy: maskProxy(p) }); } } catch {}
+    }
+    // 계정별 고정 프로필 = 세션 유지(한 번 로그인하면 계속 재사용, 재로그인 반복 방지)
+    const userDataDir = path.join(os.homedir(), ".publy", "gs-profiles", login.replace(/[^a-zA-Z0-9_-]/g, "_"));
+    fs.mkdirSync(userDataDir, { recursive: true });
+    const ctx = await stealthChromium.launchPersistentContext(userDataDir, {
+      channel: "chrome",
+      headless: false,
+      viewport: null,
+      args: ["--start-maximized", "--no-first-run", "--no-default-browser-check", "--disable-features=Translate", "--disable-dev-shm-usage"],
+      proxy: { server: p.server, username: p.username, password: p.password },
+      locale: "ko-KR",
+      timezoneId: "Asia/Seoul",
+    });
+    accountBrowsers[login] = ctx;
+    ctx.on("close", () => { delete accountBrowsers[login]; });
+    const page = ctx.pages()[0] || await ctx.newPage();
+    // 나가는 IP 확인(고정 IP 맞는지)
+    let outIp = "?";
+    try { await page.goto("https://api.ipify.org?format=json", { timeout: 20000 }); outIp = (await page.evaluate(() => { try { return JSON.parse(document.body.innerText).ip; } catch { return document.body.innerText.trim(); } }).catch(() => "?")); } catch {}
+    // 로그인 상태 확인 → 로그인돼 있으면 블로그, 아니면 로그인 페이지
+    await page.goto("https://www.naver.com", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(1500);
+    const loggedIn = await page.evaluate(() => !/nidlogin|NAVER 로그인/.test(document.body.innerText) && /로그아웃|MY|메일/.test(document.body.innerText)).catch(() => false);
+    const target = startUrl || `https://blog.naver.com/${login}`;
+    if (loggedIn) {
+      await page.goto(target, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+    } else {
+      await page.goto("https://nid.naver.com/nidlogin.login", { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+    }
+    console.log(`[계정창] ${login} · 프록시 ${maskProxy(p)} · 나가는IP ${outIp} · 로그인 ${loggedIn ? "유지" : "필요"}`);
+    return res.json({ ok: true, login, proxy: maskProxy(p), outIp, loggedIn });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: "계정 창 실행 실패: " + (e?.message || e) });
   }
 });
 

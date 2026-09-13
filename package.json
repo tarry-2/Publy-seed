@@ -1,6 +1,6 @@
 {
   "name": "goldenseed",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "골든시드(GoldenSeed) - 유튜브/인스타 골든아워 초기시딩 엔진",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -61,6 +61,18 @@
       {
         "from": "insta-bot/node_modules",
         "to": "insta-bot/node_modules"
+      },
+      {
+        "from": "naver-bot/dist",
+        "to": "naver-bot/dist"
+      },
+      {
+        "from": "naver-bot/node_modules",
+        "to": "naver-bot/node_modules"
+      },
+      {
+        "from": "neighbor-bot/dist",
+        "to": "neighbor-bot/dist"
       },
       {
         "from": "chromium",
