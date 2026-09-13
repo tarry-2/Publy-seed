@@ -22,7 +22,10 @@ async function resolveNaverBlogId(storedBlogId: string, cookies: any[], userId: 
   storedBlogId = (storedBlogId || "").split("@")[0].trim();   // 이메일이 blogId로 들어오면 아이디만
   const pickFrom = (s: string): string => {
     const m = s.match(/[?&]blogId=([a-zA-Z0-9_-]+)/) || s.match(/blog\.naver\.com\/([a-zA-Z0-9_-]+)/);
-    return (m && m[1] && !RESOLVE_INVALID.includes(m[1])) ? m[1] : "";
+    const cand = m && m[1] ? m[1] : "";
+    // ★네이버 blogId는 소문자·숫자·_·- 만(대문자 불가) → 대문자 있으면 시스템 경로(Recommendation/BlogHome 등) 오추출
+    if (!cand || RESOLVE_INVALID.includes(cand) || /[A-Z]/.test(cand)) return "";
+    return cand;
   };
   try {
     const cookieHeader = (cookies || []).map((c: any) => `${c.name}=${c.value}`).join("; ");
@@ -197,7 +200,10 @@ export async function saveNaverSession(
     const BAD_BLOG_IDS = ["PostList","BlogHome","FeedList","neighborPostList","TagList","GoBlogWrite","RedirectWriteView","PostWriteForm","MyBlog","section","m","manage","admin","GoMyblog","Write","fx"];
     const pickBlogId = (u: string): string => {
       const mm = u.match(/[?&]blogId=([a-zA-Z0-9_-]+)/) || u.match(/(?:m\.)?blog\.naver\.com\/([a-zA-Z0-9_-]+)/);
-      return (mm && mm[1] && !BAD_BLOG_IDS.includes(mm[1])) ? mm[1] : "";
+      const cand = mm && mm[1] ? mm[1] : "";
+      // ★네이버 blogId는 소문자·숫자·_·- 만(대문자 불가) → 대문자면 시스템 경로(Recommendation/BlogHome 등) 오추출
+      if (!cand || BAD_BLOG_IDS.includes(cand) || /[A-Z]/.test(cand)) return "";
+      return cand;
     };
     try {
       await page.goto("https://blog.naver.com/GoBlogWrite.naver", { waitUntil: "domcontentloaded", timeout: 30000 });
@@ -211,7 +217,9 @@ export async function saveNaverSession(
         blogId = pickBlogId(page.url());
       } catch {}
     }
-    if (!blogId) { blogId = id; console.log(`[naver] ⚠️ blogId 자동추출 실패 → 네이버ID(${id})로 임시저장(실행 시 resolveBlogIdFast가 자동 교정)`); }
+    // blogId 추출 실패 = 대개 블로그 미개설 계정(계정≠블로그). 계정 로컬파트로 임시저장 →
+    //   setupNaverProfile이 '없음' 감지해 자동 개설, 개설 후 실제 주소로 세션 갱신.
+    if (!blogId) { blogId = id.split("@")[0] || id; console.log(`[naver] ⚠️ blogId 자동추출 실패(블로그 미개설 추정) → '${blogId}'로 임시저장(개설/발행 시 교정)`); }
     console.log(`[naver] ✅ blogId: ${blogId}`);
 
     const cookies = await context.cookies();
@@ -301,23 +309,76 @@ export async function ensureLiveSessionNaver(userId: string, log: (m: string) =>
   throw new Error("로그인 재연결에 실패했어요. 계정 관리에서 '연결하기'를 한 번 눌러 직접 로그인해주세요.");
 }
 
+/* ── 🌱 자연스러운 블로그 주소 자동생성 (봇티 방지) ──
+   형용사+명사+4자리 숫자. 사람 블로그처럼 보이게. 계정↔주소 매핑은 gs_accounts.blog_domain으로 관리. */
+const BLOG_ADJ = ["bright", "sunny", "cozy", "daily", "happy", "calm", "fresh", "warm", "gentle", "clear", "soft", "lively", "merry", "vivid", "breezy", "lovely", "quiet", "golden", "silver", "misty", "mellow", "rosy", "airy", "dewy", "snug"];
+const BLOG_NOUN = ["note", "diary", "story", "days", "memo", "life", "moment", "journal", "page", "log", "space", "room", "table", "garden", "window", "trip", "cafe", "book", "letter", "season", "corner", "shelf", "path", "sketch", "album"];
+export function genBlogDomain(): string {
+  const a = BLOG_ADJ[Math.floor(Math.random() * BLOG_ADJ.length)];
+  const n = BLOG_NOUN[Math.floor(Math.random() * BLOG_NOUN.length)];
+  return `${a}${n}${1000 + Math.floor(Math.random() * 9000)}`;
+}
+
+/* ── 🌱 주제 매칭: 소개글 풀 + 프로필 이미지 풀 (계정마다 주제 일관되게 = 진짜 블로그) ──
+   온종일팜·산지직송 같은 브랜드 편중 없이 폭넓은 일반 주제. 이미지는 classify-profile-images.cjs로
+   ~/.publy/gs-profile-images/{topic}/ 에 분류돼 있음. */
+const BLOG_TOPIC_INTROS: Record<string, string[]> = {
+  cooking: ["집밥과 간단 레시피를 기록하는 공간이에요 🍳", "오늘 뭐 먹지? 매일의 요리 일기", "초보도 따라 하는 쉬운 요리 기록", "우리 집 식탁 이야기를 담아요", "제철 재료로 만드는 소소한 밥상", "냉장고 털이부터 특별식까지 🍚", "요리 초보의 성장 일기입니다", "맛있는 한 끼를 위한 기록"],
+  travel: ["발길 닿는 대로 떠나는 여행 기록 ✈️", "국내 구석구석 다녀온 이야기", "주말마다 떠나는 소소한 여행", "숨은 여행지를 찾아다녀요", "여행하며 만난 풍경들을 담아요", "떠나고 싶을 때 보는 여행 노트", "1박 2일 훌쩍 떠난 기록 🧳", "다음 여행지를 꿈꾸며 씁니다"],
+  money: ["월급쟁이의 소소한 재테크 공부 💰", "티끌 모아 태산, 돈 공부 기록", "경제적 자유를 향한 한 걸음", "재테크 초보의 성장 일기", "돈 되는 정보를 정리해요", "짠테크부터 투자까지 기록 중", "똑똑한 소비와 저축 이야기", "오늘도 경제 공부 한 스푼 📈"],
+  health: ["건강하게 사는 법을 기록해요 💪", "오늘도 운동 완료! 홈트 일기", "몸과 마음의 건강을 챙깁니다", "꾸준함이 답, 운동 기록장", "건강한 하루하루를 담아요", "운동 초보의 성장 일기 🏃", "작은 습관이 만드는 건강", "오늘의 컨디션을 기록합니다"],
+  cafe: ["카페 투어와 맛집 탐방 ☕", "동네 맛집 솔직 후기 남겨요", "커피 한 잔의 여유를 기록", "가본 카페, 먹은 맛집 기록장", "분위기 좋은 공간을 찾아다녀요", "오늘의 카페, 오늘의 디저트 🍰", "맛있는 곳은 다 기록해둡니다", "주말 맛집 탐방 일기"],
+  it: ["새 기기와 IT 소식을 정리해요 📱", "디지털 라이프를 기록합니다", "써보고 남기는 솔직 리뷰", "일상을 편하게, 유용한 앱 이야기", "가젯 좋아하는 사람의 기록장", "최신 기술 소식을 쉽게 풀어요", "스마트한 생활 팁 모음 💻", "오늘의 디지털 발견"],
+  daily: ["소소한 일상을 기록하는 공간입니다 :)", "평범한 하루하루의 기록", "생각날 때마다 끄적이는 일기장", "나를 위한 작은 기록 공간", "오늘 하루도 수고했어요 🌿", "일상 속 작은 행복을 담아요", "그냥 편하게 쓰는 이야기들", "매일의 기분과 순간을 기록해요", "잔잔한 일상을 나눕니다", "천천히, 꾸준히 기록 중이에요"],
+};
+const TOPIC_KEYS = Object.keys(BLOG_TOPIC_INTROS);
+// 내 주제 → 네이버 블로그 주제코드(paperSubjectSeq). ★실측 확정(2026-09-13).
+//   전체맵: 요리20 국내여행27 세계여행28 맛집29 비즈경제33 건강의학32 IT30 일상14 상품리뷰21 육아15 반려16 사진24 취미26 ...
+const TOPIC_NAVER_SUBJECT: Record<string, string> = { cooking: "20", travel: "27", money: "33", health: "32", cafe: "29", it: "30", daily: "14" };
+const TOPIC_MATCH: [string, RegExp][] = [
+  ["cooking", /요리|레시피|음식|맛집|식단|밥|반찬|굴비|장어|해물|한정식/],
+  ["travel", /여행|펜션|숙소|제주|속초|관광|여행지/],
+  ["money", /투자|재테크|보험|지원금|보조금|경제|주식|절세|돈/],
+  ["health", /운동|건강|다이어트|헬스|근육|홈트/],
+  ["cafe", /카페|커피|디저트|브런치|맛집/],
+  ["it", /스마트폰|아이폰|갤럭시|앱|디지털|가젯|it|테크/i],
+];
+// userId 기반 결정론적 인덱스(재실행해도 같은 주제 = 일관성)
+function hashIdx(s: string, n: number): number { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % Math.max(1, n); }
+function pickBlogTopic(userId: string, targetKeyword?: string): string {
+  if (targetKeyword) { for (const [t, re] of TOPIC_MATCH) if (re.test(targetKeyword)) return t; }
+  return TOPIC_KEYS[hashIdx(userId, TOPIC_KEYS.length)];
+}
+function genBlogIntro(topic: string): string { const arr = BLOG_TOPIC_INTROS[topic] || BLOG_TOPIC_INTROS.daily; return arr[Math.floor(Math.random() * arr.length)]; }
+function pickProfileImage(topic: string): string | null {
+  const base = path.join(os.homedir(), ".publy", "gs-profile-images");
+  for (const t of [topic, "daily"]) {
+    try { const dir = path.join(base, t); const files = fs.readdirSync(dir).filter(f => /\.(png|jpe?g|webp)$/i.test(f)); if (files.length) return path.join(dir, files[Math.floor(Math.random() * files.length)]); } catch {}
+  }
+  return null;
+}
+
 /* ── 🌱 프로필 자동 세팅 (계정 육성) ──
-   블로그명·소개(bio)·프로필 사진을 네이버 블로그 관리 페이지에서 자동 입력.
-   ★네이버 DOM은 실측으로만 확정 → 진단로그를 단계마다 심어 어디서 막히는지 한 방에 나오게.
+   0) 블로그 없으면 자동 개설(주소=blogDomain 지정 or 자동생성) → 1) 블로그명·소개·사진 세팅.
+   ★네이버 DOM 전부 실측 확정(2026-09-12, 넘버1 계정). 개설 흐름:
+     section.blog.naver.com → "블로그 아이디 만들기" → #domainInput 타이핑 → #domainRegisterBtn → #confirmSubmitBtn(모달).
    실패해도 예외 안 던지고 {ok, log} 반환(육성 루프가 다음 계정으로). */
 export async function setupNaverProfile(params: {
-  userId: string; blogName?: string; bio?: string; profileImageUrl?: string;
-  showWindow?: boolean; useProxy?: boolean;
+  userId: string; blogName?: string; nickname?: string; bio?: string; profileImageUrl?: string;
+  blogDomain?: string; topic?: string; targetKeyword?: string; showWindow?: boolean; useProxy?: boolean;
   onLog?: (m: string) => void;
-}): Promise<{ ok: boolean; changed: string[]; error?: string }> {
-  const { userId, blogName, bio, profileImageUrl, showWindow = false, useProxy = false, onLog } = params;
+}): Promise<{ ok: boolean; changed: string[]; blogDomain?: string; topic?: string; error?: string }> {
+  const { userId, blogName, nickname, bio, profileImageUrl, blogDomain, showWindow = false, useProxy = false, onLog } = params;
+  // 주제 결정: 지정값 > target_keyword 추론 > userId 결정론적. 소개·프로필사진이 이 주제로 일관되게.
+  const topic = (params.topic && BLOG_TOPIC_INTROS[params.topic]) ? params.topic : pickBlogTopic(userId, params.targetKeyword);
   const log = onLog || console.log;
   const changed: string[] = [];
+  let createdDomain: string | undefined;
   let browser: any = null;
   try {
     const cookies = await ensureLiveSessionNaver(userId, log);
     const session = readSession<any>(naverSessionName(userId), LEGACY_SESSION_DIRS);
-    const blogId = session.blogId || session.loginId || "";
+    let blogId = session.blogId || session.loginId || "";
     log(`[프로필] 🌱 세팅 시작 — 계정 ${userId} · 블로그 ${blogId}`);
 
     let proxyOpt: any = undefined;
@@ -329,50 +390,155 @@ export async function setupNaverProfile(params: {
     await context.addCookies(cookies);
     const page = await context.newPage();
 
-    // 블로그 관리 > 기본정보(블로그명·소개) 페이지. ★URL·셀렉터는 실측 교정 대상.
-    const mgmtUrl = `https://admin.blog.naver.com/BasicInfo.naver?blogId=${encodeURIComponent(blogId)}`;
-    log(`[프로필] ▶ 관리 페이지 진입: ${mgmtUrl}`);
+    // ── 0) 블로그 존재 확인 & 없으면 자동 개설 ──
+    //    네이버는 계정≠블로그. 블로그 없으면 발행 대상이 없음 → 먼저 개설.
+    //    ★자연스러운 일직선 경로(사람이 블로그 시작하는 그대로): 블로그 홈(section.blog) 한 번만 열고,
+    //      거기서 '블로그 아이디 만들기' 버튼 유무로 미개설 판정 → 그 자리서 바로 개설.
+    //      (blog.naver.com/{id} '없음 페이지' 방문·개설후 재방문 안 함 = 뒤로갔다 딴경로 도는 봇티 제거.)
+    //      흐름 전부 실측 확정(넘버1·넘버2, 2026-09-12).
+    log(`[프로필] ▶ 블로그 홈 열어 개설 여부 확인(section.blog)`);
+    await page.goto("https://section.blog.naver.com/BlogHome.naver", { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.waitForTimeout(2500);
+    // 미개설이면 "블로그 아이디 만들기" 버튼/팝업이 뜬다
+    let makeBtn: any = null;
+    for (const sel of ["a:has-text('블로그 아이디 만들기')", "button:has-text('블로그 아이디 만들기')"]) {
+      try { const el = page.locator(sel).first(); if (await el.count() && await el.isVisible()) { makeBtn = el; break; } } catch {}
+    }
+    const blogExists = !makeBtn;
+    log(`[프로필] 블로그 상태: ${blogExists ? "✅ 있음" : "❌ 없음(개설 필요)"}`);
+
+    if (!blogExists) {
+      // 개설 주소: 지정값(gs_accounts.blog_domain) 우선, 없으면 자동생성. 소문자·영숫자만.
+      const domain = ((blogDomain && blogDomain.trim()) ? blogDomain.trim() : genBlogDomain()).toLowerCase().replace(/[^a-z0-9_-]/g, "");
+      log(`[개설] 🆕 블로그 개설 — 주소 "${domain}" (변경 불가)`);
+      // 1) 이미 블로그 홈에 있음 → 그 자리서 바로 '블로그 아이디 만들기'(딴 페이지로 안 감)
+      await makeBtn.click();
+      log(`[개설] '블로그 아이디 만들기' 클릭`);
+      await page.waitForTimeout(1800);
+      // 2) 주소 입력 — ★반드시 실제 타이핑(fill은 확인버튼 활성화 안 됨)
+      const din = page.locator("#domainInput").first();
+      await din.click(); await din.fill(""); await din.pressSequentially(domain, { delay: 90 });
+      await page.waitForTimeout(800);
+      log(`[개설] 주소 입력: ${domain}`);
+      // 3) 중복확인 "확인"(#domainRegisterBtn, force — submit input)
+      await page.locator("#domainRegisterBtn").first().click({ force: true });
+      await page.waitForTimeout(2500);
+      // 4) "이 아이디로 블로그를 만들까요?" 커스텀 모달 → 확인(#confirmSubmitBtn). ★네이티브 confirm 아님.
+      try {
+        await page.getByText("블로그를 만들까요", { exact: false }).first().waitFor({ state: "visible", timeout: 8000 });
+        const sub = page.locator("#confirmSubmitBtn").first();
+        if (await sub.count() && await sub.isVisible()) { await sub.click(); }
+        else { await page.locator("xpath=//*[contains(normalize-space(),'블로그를 만들까요')]/following::*[normalize-space(text())='확인'][1]").first().click(); }
+        log(`[개설] 생성 확인 모달 → 확인 클릭`);
+      } catch {
+        const at = await page.evaluate(() => document.body.innerText).catch(() => "");
+        throw new Error(`개설 확인 모달 미출현(주소 '${domain}' 중복/불가 가능): ${at.slice(0, 80).replace(/\s+/g, " ")}`);
+      }
+      // 5) 개설 직후 온보딩("나만의 블로그 시작")이 뜨면 성공 — 재방문 없이 자연스럽게 다음 단계로
+      await page.waitForTimeout(3500);
+      // 성공: 세션 blogId를 개설 주소로 갱신(발행이 이 주소로 향함) + 반환
+      blogId = domain;
+      createdDomain = domain;
+      try { const s = readSession<any>(naverSessionName(userId), LEGACY_SESSION_DIRS); if (s) { s.blogId = domain; writeSession(naverSessionName(userId), s); const acc = naverAcctSessionName(userId, s.loginId || ""); if (s.loginId) writeSession(acc, s); } } catch {}
+      changed.push(`블로그개설:${domain}`);
+      log(`[개설] ✅ 개설 완료 — blog.naver.com/${domain}`);
+      // 온보딩("나중에 할래요") 닫기 — 이어서 관리 페이지로 자연 이동
+      for (const sel of ["a:has-text('나중에 할래요')", "button:has-text('나중에 할래요')", "a:has-text('나중에')", "button:has-text('닫기')"]) {
+        try { const el = page.locator(sel).first(); if (await el.count() && await el.isVisible()) { await el.click(); await page.waitForTimeout(1000); break; } } catch {}
+      }
+    }
+
+    // 블로그 관리 > 블로그 정보(AdminUserBasic) — ★실측 확정(2026-09-13, 넘버2).
+    //   iframe src URL을 직접 열면 폼만 있는 페이지가 떠 SPA 우회 가능. 폼이 프레임 안이면 프레임 탐색.
+    const mgmtUrl = `https://admin.blog.naver.com/AdminUserBasic.naver?blogId=${encodeURIComponent(blogId)}`;
+    log(`[프로필] ▶ 블로그 정보 진입: ${mgmtUrl}`);
     await page.goto(mgmtUrl, { waitUntil: "domcontentloaded", timeout: 30000 });
-    await page.waitForTimeout(1500);
-    log(`[프로필] 현재 URL: ${page.url()}`);
+    await page.waitForTimeout(2000);
     if (/nidlogin|nid\.naver\.com/i.test(page.url())) { throw new Error("세션 만료 — 로그인 페이지로 튕김(재연결 필요)"); }
+    // 폼(#papername)을 가진 스코프(페이지 or iframe) 찾기
+    let scope: any = page;
+    if (!(await page.locator("#papername").count().catch(() => 0))) {
+      for (const fr of page.frames()) { try { if (await fr.locator("#papername").count()) { scope = fr; break; } } catch {} }
+    }
+    const fillField = async (sel: string, val: string, label: string) => {
+      try {
+        const el = scope.locator(sel).first();
+        if (await el.count()) { await el.click({ clickCount: 3 }); await el.fill(""); await el.pressSequentially(val, { delay: 25 }); changed.push(label); log(`[프로필] ✅ ${label}: ${val.slice(0, 30)}`); return true; }
+        log(`[프로필] ⚠️ ${label} 입력칸(${sel}) 못 찾음`); return false;
+      } catch (e: any) { log(`[프로필] ⚠️ ${label}: ${e?.message}`); return false; }
+    };
+    // 블로그명(#papername) · 별명(#frmNickname) · 소개(#frmIntroduce)
+    if (blogName && blogName.trim()) await fillField("#papername", blogName.trim(), "블로그명");
+    const nk = (nickname && nickname.trim()) ? nickname.trim() : (blogName || "").trim();
+    if (nk) await fillField("#frmNickname", nk, "별명");
+    // 소개: 지정값 없으면 주제 매칭 랜덤(온종일팜·산지직송 편중 없이 다양하게)
+    const introText = (bio && bio.trim()) ? bio.trim() : genBlogIntro(topic);
+    if (introText) await fillField("#frmIntroduce", introText, "소개");
 
-    // 블로그명
-    if (blogName && blogName.trim()) {
-      const sels = ["#blogName", "input[name='blogName']", "input[id*='blogName']"];
-      let done = false;
-      for (const s of sels) { try { const el = await page.$(s); if (el) { await el.click({ clickCount: 3 }); await el.fill(blogName.trim()); changed.push("블로그명"); done = true; log(`[프로필] ✅ 블로그명 입력: ${blogName.trim()} (셀렉터 ${s})`); break; } } catch {} }
-      if (!done) log(`[프로필] ⚠️ 블로그명 입력칸 못 찾음 — 셀렉터 교정 필요(위 URL/DOM 확인)`);
-    }
-    // 소개
-    if (bio && bio.trim()) {
-      const sels = ["#blogIntro", "textarea[name='blogIntro']", "textarea[id*='intro']", "textarea[id*='Intro']"];
-      let done = false;
-      for (const s of sels) { try { const el = await page.$(s); if (el) { await el.click({ clickCount: 3 }); await el.fill(bio.trim()); changed.push("소개"); done = true; log(`[프로필] ✅ 소개 입력 (셀렉터 ${s})`); break; } } catch {} }
-      if (!done) log(`[프로필] ⚠️ 소개 입력칸 못 찾음 — 셀렉터 교정 필요`);
-    }
-    // 프로필 사진(URL) — 파일 업로드는 다운로드 필요, 우선 진단만
-    if (profileImageUrl && profileImageUrl.trim()) {
-      log(`[프로필] ℹ️ 프로필 사진 업로드는 파일 다운로드 단계 필요(다음 반복에서 구현). URL=${profileImageUrl.slice(0, 60)}`);
+    // 내 블로그 주제(paperSubjectSeq) — ★커스텀 select라 드롭다운이 클릭으로 잘 안 열림 →
+    //   JS로 라디오 checked+change 직접 설정(폼 제출 시 이 값이 서버로 감) + 버튼 텍스트 갱신.
+    const subjCode = TOPIC_NAVER_SUBJECT[topic];
+    if (subjCode) {
+      try {
+        const set = await scope.evaluate((code: string) => {
+          const r = document.querySelector(`input[name=paperSubjectSeq][value='${code}']`) as HTMLInputElement | null;
+          if (!r) return false;
+          r.checked = true;
+          r.dispatchEvent(new Event("input", { bubbles: true }));
+          r.dispatchEvent(new Event("change", { bubbles: true }));
+          r.dispatchEvent(new Event("click", { bubbles: true }));
+          const lbl = document.querySelector(`label[for='${r.id}']`);
+          const btn = document.querySelector("#subject_btn");
+          if (lbl && btn) btn.textContent = (lbl.textContent || "").trim();
+          return true;
+        }, subjCode);
+        if (set) { changed.push("주제"); log(`[프로필] ✅ 주제: ${topic}(코드 ${subjCode})`); await page.waitForTimeout(400); }
+        else log(`[프로필] ⚠️ 주제 라디오(value=${subjCode}) 못 찾음`);
+      } catch (e: any) { log(`[프로필] ⚠️ 주제: ${e?.message}`); }
     }
 
-    // 저장 버튼 — ★셀렉터 실측 교정 대상
-    if (changed.length) {
-      const saveSels = ["a.btn_save", "button.btn_save", "a[onclick*='save']", "button:has-text('확인')", "a:has-text('확인')"];
+    // 프로필 사진: 지정 URL > Flow 이미지 풀(주제 매칭). ★'등록'(#_btnProfileImageUpload)=filechooser 방식.
+    {
+      let imgPath: string | null = null, isTmp = false;
+      if (profileImageUrl && profileImageUrl.trim()) { imgPath = await downloadImageToTemp(profileImageUrl.trim()).catch(() => null); isTmp = !!imgPath; }
+      if (!imgPath) imgPath = pickProfileImage(topic); // ~/.publy/gs-profile-images/{topic}/
+      if (imgPath) {
+        try {
+          const [fc] = await Promise.all([
+            page.waitForEvent("filechooser", { timeout: 7000 }),
+            scope.locator("#_btnProfileImageUpload, a:has-text('등록')").first().click(),
+          ]);
+          await fc.setFiles(imgPath);
+          changed.push("프로필사진"); log(`[프로필] ✅ 프로필 사진(${topic}): ${path.basename(imgPath)}`);
+          await page.waitForTimeout(3500); // 업로드+161px 썸네일 처리
+          // 편집/적용 팝업 있으면 확인
+          for (const s of ["button:has-text('적용')", "button:has-text('확인')", "a:has-text('적용')"]) { try { const el = scope.locator(s).first(); if (await el.count() && await el.isVisible()) { await el.click(); await page.waitForTimeout(1200); break; } } catch {} }
+          // 네이버 프로필에도 적용 체크(선택)
+          try { const c = scope.locator("input[type=checkbox]#chk1, input[name=notifyNaverProfile]").first(); if (await c.count() && !(await c.isChecked())) await c.check({ force: true }); } catch {}
+        } catch (e: any) { log(`[프로필] ⚠️ 프로필 사진 실패(filechooser): ${e?.message}`); }
+        if (isTmp) try { fs.unlinkSync(imgPath); } catch {}
+      } else log(`[프로필] ℹ️ 프로필 사진 풀 비어있음(classify-profile-images 먼저 실행)`);
+    }
+
+    // 저장 — ★실측 확정: 폼 하단 input[type=button][value=확인]
+    if (changed.some(c => ["블로그명", "별명", "소개", "프로필사진"].includes(c))) {
       let saved = false;
-      for (const s of saveSels) { try { const el = await page.$(s); if (el && await el.isVisible()) { await el.click(); saved = true; log(`[프로필] 💾 저장 클릭 (셀렉터 ${s})`); break; } } catch {} }
-      if (!saved) log(`[프로필] ⚠️ 저장 버튼 못 찾음 — 셀렉터 교정 필요(입력은 됨)`);
-      await page.waitForTimeout(2000);
+      for (const s of ["input[type=button][value='확인']", "input[type=submit][value='확인']", "button:has-text('확인')", "a:has-text('확인')"]) {
+        try { const el = scope.locator(s).first(); if (await el.count() && await el.isVisible()) { await el.click(); saved = true; log(`[프로필] 💾 저장(확인) 클릭`); break; } } catch {} }
+      if (!saved) log(`[프로필] ⚠️ 저장(확인) 버튼 못 찾음(입력은 됨)`);
+      await page.waitForTimeout(2500);
+      // 저장 확인 alert/모달 있으면 수락
+      for (const s of ["button:has-text('확인')", "#confirmSubmitBtn"]) { try { const el = scope.locator(s).first(); if (await el.count() && await el.isVisible()) { await el.click(); await page.waitForTimeout(800); break; } } catch {} }
     }
 
     await browser.close();
     const ok = changed.length > 0;
-    log(`[프로필] ${ok ? "✅ 완료" : "⚠️ 변경된 항목 없음"} — 변경: ${changed.join(", ") || "없음"}`);
-    return { ok, changed };
+    log(`[프로필] ${ok ? "✅ 완료" : "⚠️ 변경된 항목 없음"} — 주제 ${topic} · 변경: ${changed.join(", ") || "없음"}`);
+    return { ok, changed, blogDomain: createdDomain, topic };
   } catch (e: any) {
     try { if (browser) await browser.close(); } catch {}
     log(`[프로필] ❌ 실패: ${e?.message}`);
-    return { ok: false, changed, error: e?.message };
+    return { ok: false, changed, blogDomain: createdDomain, topic, error: e?.message };
   }
 }
 

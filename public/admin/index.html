@@ -100,6 +100,9 @@
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div class="logo" style="width:34px;height:34px;border-radius:10px;margin:0"><span style="font-size:22px">C</span></div>
       <div style="font-size:16px;font-weight:900">골든시드 <small style="color:var(--sub);font-weight:600">관리자</small></div>
+      <!-- 앱(iframe)에서만 표시 — 회원화면 이동/최신반영을 부모앱에 postMessage로 요청 -->
+      <button class="btn sm" id="appBackBtn" style="display:none">← 회원 화면</button>
+      <button class="btn sm" id="appReloadBtn" style="display:none">🔄 최신 반영</button>
       <button class="btn sm" id="themeMain" style="margin-left:auto">🌙</button>
       <button class="btn sm" id="pwChg">🔑 비번</button>
       <button class="btn sm" id="logout">로그아웃</button>
@@ -235,7 +238,10 @@
                 <div id="twPreviewEmpty" style="color:var(--sub);font-size:12px;text-align:center;line-height:1.7;flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"><div>✍️ 여기에 <b>생성된 글</b>이 나타나요.<br>위에 키워드를 넣고 <b style="color:var(--gold)">✨ 글 생성</b>을 누르세요.</div></div>
                 <div id="twPreviewLoading" style="display:none;color:var(--gold);font-size:12.5px;text-align:center;font-weight:700;flex:1;align-items:center;justify-content:center">✍️ 글을 생성하는 중이에요… (제목 → 본문 순서로 만들어요)</div>
                 <div id="twPreviewDone" style="display:none;flex:1;flex-direction:column;min-height:0">
-                  <div id="twTitle" style="font-weight:800;font-size:14px;margin-bottom:8px"></div>
+                  <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+                    <div id="twTitle" style="font-weight:800;font-size:14px;flex:1;min-width:0"></div>
+                    <span id="twCharCount" class="pill" style="background:var(--glow);color:var(--gold);flex-shrink:0"></span>
+                  </div>
                   <div id="twBody" style="font-size:12px;color:var(--sub);line-height:1.7;white-space:pre-wrap;flex:1;overflow-y:auto;min-height:0"></div>
                   <div id="twTags" style="margin-top:8px;font-size:11px;color:var(--gold);font-weight:700"></div>
                 </div>
@@ -355,12 +361,12 @@
 
             <!-- ── 🌱 육성 탭 (준비 중 그릇) ── -->
             <div class="tw-tabpane" data-twpane="grow" style="display:none">
-              <!-- 🪪 프로필 자동 세팅 -->
+              <!-- 🪪 블로그 개설 + 프로필 자동 세팅 -->
               <div class="tw-panel">
-                <div class="tw-panel-h">🪪 프로필 자동 세팅</div>
-                <div class="muted" style="font-size:11.5px;line-height:1.6;margin-bottom:10px">왼쪽에서 선택한 계정의 <b>블로그명·소개</b>를 네이버에 자동 입력해요(gs_accounts에 등록된 값 사용). 빈 계정=봇티 → 채워야 노출·생존.</div>
-                <button class="btn gold sm" id="twProfileRun" style="width:100%">🪪 선택 계정 프로필 세팅 (<span id="twProfileCount">0</span>개)</button>
-                <div class="muted" style="font-size:10.5px;margin-top:6px">※ 진행은 아래 📋 발행 로그에 떠요. 창 보기 ON이면 실제 크롬 창도 봐요.</div>
+                <div class="tw-panel-h">🪪 블로그 개설 + 프로필 세팅</div>
+                <div class="muted" style="font-size:11.5px;line-height:1.6;margin-bottom:10px">네이버는 <b>계정 ≠ 블로그</b>라, 새 계정은 블로그가 없어요(발행 대상 없음). 이 버튼은 선택 계정에 <b>①블로그가 없으면 자동 개설</b>(주소는 등록된 블로그주소, 없으면 자연스럽게 자동생성) <b>②블로그명·소개를 자동 입력</b>해요. 개설한 주소는 <b>변경 불가</b>라 계정에 영구 저장됩니다.</div>
+                <button class="btn gold sm" id="twProfileRun" style="width:100%">🪪 선택 계정 개설+프로필 (<span id="twProfileCount">0</span>개)</button>
+                <div class="muted" style="font-size:10.5px;margin-top:6px">※ 진행은 아래 📋 발행 로그에 떠요. 창 보기 ON이면 실제 크롬 창도 봐요. 개설된 주소는 왼쪽 계정 표에 표시돼요.</div>
               </div>
               <!-- 🔥 워밍업(품앗이) -->
               <div class="tw-panel">
@@ -392,8 +398,8 @@
             <div class="tw-tabpane" data-twpane="proxy" style="display:none">
               <div class="tw-panel">
                 <div class="tw-panel-h">🌐 프록시 <span class="muted" style="font-weight:600">— 계정마다 다른 한국 IP(연좌제 밴 방지)</span></div>
-                <!-- 발행 시 프록시 사용 토글 -->
-                <button class="btn sm" id="twUseProxy" style="width:100%;margin-bottom:8px">🌐 발행 시 프록시 사용 OFF</button>
+                <!-- 발행 시 프록시 사용 토글(클릭=켜기/끄기, 상태 명확히) -->
+                <button class="btn sm" id="twUseProxy" style="width:100%;margin-bottom:8px">⚪ 프록시 안 씀 (내 IP) — 눌러서 켜기</button>
                 <div class="muted" style="font-size:11px;line-height:1.5;margin-bottom:12px;padding:8px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--line)">켜면 각 계정 발행이 <b>한국 프록시 IP</b>를 경유해요(gs_proxies에서 부하분산 자동 배정). 계정 수백~수천 개면 <b>필수</b>(같은 IP=연좌제 밴).</div>
                 <!-- 프록시 등록 -->
                 <div style="font-size:12px;font-weight:800;margin-bottom:6px">➕ 프록시 등록</div>
@@ -442,8 +448,16 @@
           <button class="chip" data-seedpurpose="seeding">골든아워 시딩</button>
           <button class="chip" data-seedpurpose="backlink">백링크</button>
           <button class="chip" data-seedpurpose="">전체</button>
-          <button class="btn gold sm" id="seedAddBtn" style="margin-left:auto">➕ 계정 등록</button>
+          <!-- 🆕 가입용 프록시 창 + 프록시 연결 상태등 -->
+          <span style="display:inline-flex;align-items:center;gap:6px;margin-left:auto;padding:5px 10px;border-radius:9px;background:var(--panel);border:1px solid var(--line)">
+            <span id="pxDot" title="프록시 연결 상태" style="width:10px;height:10px;border-radius:50%;background:#555;display:inline-block;flex-shrink:0"></span>
+            <span id="pxDotLabel" class="muted" style="font-size:11px;font-weight:700">프록시 확인중…</span>
+          </span>
+          <button class="btn sm" id="signupBtn" title="프록시 걸린 크롬창으로 네이버 회원가입">🆕 가입용 창 열기</button>
+          <button class="btn gold sm" id="seedAddBtn">➕ 계정 등록</button>
         </div>
+        <div id="signupMsg" class="muted" style="font-size:11px;margin:2px 0 8px;min-height:14px"></div>
+        <style>@keyframes pxBlink{0%,100%{opacity:1}50%{opacity:.25}}</style>
 
         <!-- 등록 폼 (접이식) -->
         <div id="seedForm" class="row" style="display:none">
@@ -455,6 +469,15 @@
             <input id="sfKeyword" placeholder="타깃 키워드(예: 온종일팜)" />
             <input id="sfBlogName" placeholder="블로그명" />
             <input id="sfDisplayName" placeholder="별명(닉네임)" />
+          </div>
+          <!-- 🌱 블로그 주소(도메인): 계정≠블로그, 개설 시 확정·변경불가 -->
+          <div style="margin-top:8px">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+              <span style="font-size:12px;color:var(--sub);flex-shrink:0">blog.naver.com/</span>
+              <input id="sfBlogDomain" placeholder="블로그 주소(영문, 비우면 개설 시 자동생성)" style="flex:1;min-width:180px" />
+              <button type="button" class="btn sm" id="sfGenDomain" style="flex-shrink:0;white-space:nowrap">🎲 자동생성</button>
+            </div>
+            <div class="muted" style="font-size:10.5px;margin-top:4px">※ 주소는 개설하면 <b style="color:var(--gold)">변경 불가</b>. 비워두면 개설 시 자연스러운 주소를 자동으로 만들어요(권장). <b>네이버 아이디·개인정보 포함 주소는 네이버가 막아요.</b></div>
           </div>
           <!-- 🪪 프로필 육성: 빈 계정=봇티, 채워야 노출·생존 -->
           <div style="margin-top:10px;padding-top:10px;border-top:1px dashed var(--line)">
@@ -538,6 +561,15 @@
   function toggleTheme(){ applyTheme(document.documentElement.classList.contains('light')?'dark':'light'); }
   (function(){ let t='dark'; try{ t=localStorage.getItem('gs_admin_theme')||'dark'; }catch(e){} applyTheme(t); })();
   ['themeGate','themeMain'].forEach(id=>{ const b=document.getElementById(id); if(b) b.onclick=toggleTheme; });
+
+  // ── 앱(iframe) 전용: 회원화면 이동/최신반영 버튼 — 부모앱(App.tsx)에 postMessage로 요청 ──
+  //   웹 관리자(직접 접속)에선 window.parent===window라 숨김. 앱에서만 헤더 "골든시드 관리자" 옆에 표시.
+  (function(){
+    if (window.parent === window) return; // 웹 직접 접속 → 버튼 불필요
+    const back=document.getElementById('appBackBtn'), rel=document.getElementById('appReloadBtn');
+    if(back){ back.style.display=''; back.onclick=()=>{ try{ parent.postMessage({type:'gs-admin-nav',action:'dashboard'},'*'); }catch(e){} }; }
+    if(rel){ rel.style.display=''; rel.onclick=()=>{ try{ parent.postMessage({type:'gs-admin-nav',action:'reload'},'*'); }catch(e){} }; }
+  })();
 
   // 플랫폼별 액션(회원 주문화면과 동일)
   const TOOLS={
@@ -736,7 +768,7 @@
   });
   function seedResetForm(){
     seedEditId=null; $('seedFormTitle').textContent='새 계정 등록'; $('sfMsg').textContent='';
-    ['sfLogin','sfPassword','sfPhone','sfKeyword','sfBlogName','sfDisplayName','sfProfileImage','sfBio'].forEach(id=>$(id).value='');
+    ['sfLogin','sfPassword','sfPhone','sfKeyword','sfBlogName','sfBlogDomain','sfDisplayName','sfProfileImage','sfBio'].forEach(id=>$(id).value='');
     seedSyncPreview();
   }
   // 프로필 사진 URL 미리보기(입력 즉시 반영)
@@ -745,13 +777,47 @@
     if(url){ img.src=url; img.style.display='block'; } else { img.removeAttribute('src'); img.style.display='none'; }
   }
   $('sfProfileImage').addEventListener('input',seedSyncPreview);
+  // 🎲 블로그 주소 자동생성(자연스러운 영문+숫자, 봇티 방지) — 봇의 genBlogDomain과 동일 규칙
+  function genBlogDomainFront(){
+    const A=['bright','sunny','cozy','daily','happy','calm','fresh','warm','gentle','clear','soft','lively','merry','vivid','breezy','lovely','quiet','golden','silver','misty','mellow','rosy','airy','dewy','snug'];
+    const N=['note','diary','story','days','memo','life','moment','journal','page','log','space','room','table','garden','window','trip','cafe','book','letter','season','corner','shelf','path','sketch','album'];
+    return A[Math.floor(Math.random()*A.length)]+N[Math.floor(Math.random()*N.length)]+(1000+Math.floor(Math.random()*9000));
+  }
+  $('sfGenDomain').onclick=()=>{ $('sfBlogDomain').value=genBlogDomainFront(); };
   $('seedAddBtn').onclick=()=>{ const f=$('seedForm'); const willShow=f.style.display==='none'; if(willShow) seedResetForm(); f.style.display=willShow?'block':'none'; };
+
+  // 🆕 가입용 프록시 창 열기 (네이버 회원가입 — 프록시 IP로, 대량생성 딱지 회피)
+  $('signupBtn').onclick=async()=>{
+    const b=$('signupBtn'), m=$('signupMsg'); b.disabled=true; m.style.color='var(--sub)'; m.textContent='프록시 크롬창 여는 중…';
+    try{
+      const r=await fetch(BOT+'/api/signup/launch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nationality:'kr'})});
+      const d=await r.json().catch(()=>({}));
+      if(d.ok){ m.style.color='var(--good)'; m.textContent='✅ 가입창 열림 (프록시 '+(d.proxy||'')+' · 나가는IP '+(d.outIp||'?')+'). 그 창에서 SMS 인증까지 직접 가입하세요.'; }
+      else { m.style.color='var(--danger)'; m.textContent='❌ '+(d.error||'실패')+' (앱 발행봇 실행 확인)'; }
+    }catch(e){ m.style.color='var(--danger)'; m.textContent='❌ '+e.message+' (앱 발행봇 3368 실행 확인)'; }
+    b.disabled=false;
+  };
+
+  // 🌐 프록시 연결 상태등 — 살아있으면(쓰든 안 쓰든) 계속 초록 깜빡, 한도 끝나 죽으면 꺼짐(회색)
+  async function pxHeartbeat(){
+    const dot=$('pxDot'), lab=$('pxDotLabel'); if(!dot) return;
+    try{
+      // 기본 프록시로 IP 확인 요청(서버가 프록시 경유 접속 성공하면 살아있음)
+      const r=await fetch(BOT+'/api/proxy/check',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({useDefault:true})});
+      const d=await r.json().catch(()=>({}));
+      const alive = d.ok && (d.ip||d.outIp||d.country);
+      if(alive){ dot.style.background='#22c55e'; dot.style.boxShadow='0 0 6px #22c55e'; dot.style.animation='pxBlink 1.1s ease-in-out infinite'; lab.textContent='프록시 연결됨'+(d.country?' ('+d.country+')':''); lab.style.color='#22c55e'; }
+      else { dot.style.background='#555'; dot.style.boxShadow='none'; dot.style.animation='none'; lab.textContent='프록시 꺼짐(한도소진?)'; lab.style.color='var(--danger)'; }
+    }catch(e){ dot.style.background='#555'; dot.style.boxShadow='none'; dot.style.animation='none'; lab.textContent='프록시 확인불가(봇 실행?)'; lab.style.color='var(--sub)'; }
+  }
+  pxHeartbeat(); setInterval(pxHeartbeat, 15000);
   $('sfCancel').onclick=()=>{ $('seedForm').style.display='none'; seedResetForm(); };
   $('sfSave').onclick=async()=>{
     const login=$('sfLogin').value.trim();
     if(!login){ $('sfMsg').textContent='로그인 아이디는 필수'; $('sfMsg').style.color='var(--danger)'; return; }
     const data={login,password:$('sfPassword').value.trim(),phone_used:$('sfPhone').value.trim(),
       target_keyword:$('sfKeyword').value.trim(),blog_name:$('sfBlogName').value.trim(),
+      blog_domain:$('sfBlogDomain').value.trim().toLowerCase().replace(/[^a-z0-9_-]/g,''),
       display_name:$('sfDisplayName').value.trim(),profile_image_url:$('sfProfileImage').value.trim(),bio:$('sfBio').value.trim()};
     let error;
     if(seedEditId){
@@ -803,6 +869,7 @@
           profileDot+'</div>'+
         (r.bio?'<div class="muted" style="margin:6px 0 2px;font-style:italic">"'+r.bio+'"</div>':'')+
         '<div class="muted" style="margin:4px 0 8px">'+
+          (r.blog_domain?'<span title="블로그 주소(개설됨)" style="color:#7dd88a">🔗 blog.naver.com/'+r.blog_domain+'</span> · ':'<span title="아직 블로그 없음" style="color:#f7cd63">🔗 주소 미개설</span> · ')+
           (r.target_keyword?'🎯 '+r.target_keyword+' · ':'')+'🌱 워밍 '+(r.warmup_day||0)+'일 · 📝 '+(r.post_count||0)+' · 🤝 '+(r.neighbor_count||0)+
           (r.health_note?' · <span style="color:var(--danger)">⚠️ '+r.health_note+'</span>':'')+'</div>'+
         '<div style="display:flex;gap:6px;flex-wrap:wrap">'+nexts+
@@ -819,6 +886,7 @@
       seedEditId=r.id;
       $('sfLogin').value=r.login||''; $('sfPassword').value=r.password||'';
       $('sfPhone').value=r.phone_used||''; $('sfKeyword').value=r.target_keyword||''; $('sfBlogName').value=r.blog_name||'';
+      $('sfBlogDomain').value=r.blog_domain||'';
       $('sfDisplayName').value=r.display_name||''; $('sfProfileImage').value=r.profile_image_url||''; $('sfBio').value=r.bio||''; seedSyncPreview();
       $('seedFormTitle').textContent='✏️ 계정 수정 — '+r.login; $('sfMsg').textContent='';
       $('seedForm').style.display='block'; $('seedForm').scrollIntoView({behavior:'smooth',block:'center'});
@@ -916,21 +984,26 @@
     const queue=twSelectedRows();
     if(!queue.length){ alert('왼쪽에서 계정을 먼저 선택하세요'); return; }
     const b=$('twProfileRun'); b.disabled=true;
-    twPush('━━━━━ 🪪 프로필 자동 세팅 시작 · '+queue.length+'개 계정 ━━━━━',C.sys);
+    twPush('━━━━━ 🪪 블로그 개설 + 프로필 세팅 시작 · '+queue.length+'개 계정 ━━━━━',C.sys);
     let ok=0,fail=0;
     for(let i=0;i<queue.length;i++){
       const acc=queue[i], label=acc.blog_name||acc.login, userId='gs_'+acc.id;
-      twPush('┏━ ['+(i+1)+'/'+queue.length+'] '+label+' ('+acc.login+') 프로필 세팅…',C.acct);
+      twPush('┏━ ['+(i+1)+'/'+queue.length+'] '+label+' ('+acc.login+') 블로그 없으면 개설 → 프로필…',C.acct);
       try{
-        const r=await fetch(BOT+'/api/profile-setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId,blogName:acc.blog_name,bio:acc.bio,profileImageUrl:acc.profile_image_url,showWindow:twShowWin,useProxy:twUseProxy})});
+        // blogDomain: 지정값 있으면 그 주소로, 없으면 봇이 자연스럽게 자동생성 후 반환
+        const r=await fetch(BOT+'/api/profile-setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId,blogName:acc.blog_name,nickname:acc.display_name,bio:acc.bio,profileImageUrl:acc.profile_image_url,blogDomain:acc.blog_domain||undefined,targetKeyword:acc.target_keyword||undefined,showWindow:twShowWin,useProxy:twUseProxy})});
         const d=await r.json().catch(()=>({}));
         if(Array.isArray(d.logs)) d.logs.forEach(m=>twPush('┃ '+m,C.step));
+        // 개설됐으면(주소 반환) gs_accounts에 주소 영구저장(변경 불가 주소) — 반쪽패치 방지: DB·세션 통일
+        if(d.blogDomain && d.blogDomain!==acc.blog_domain){
+          try{ await sb.rpc('gs_seed_update',{p_token:TOKEN,p_id:acc.id,p_data:{blog_domain:d.blogDomain}}); acc.blog_domain=d.blogDomain; twPush('┃ 🌱 블로그 주소 확정·저장: blog.naver.com/'+d.blogDomain,C.ok); }catch(e){ twPush('┃ ⚠️ 주소 저장 실패(수동 기록 필요): '+d.blogDomain,C.warn); }
+        }
         if(d.ok){ ok++; twPush('┗━ ✅ 완료: '+(d.changed||[]).join(', '),C.ok);
           try{ await sb.rpc('gs_seed_set_status',{p_token:TOKEN,p_id:acc.id,p_status:'profiled'}); }catch(e){}
-        } else { fail++; twPush('┗━ ⚠️ '+(d.error||'변경 없음')+' (셀렉터 교정 필요할 수 있음)',C.warn); }
+        } else { fail++; twPush('┗━ ⚠️ '+(d.error||'변경 없음'),C.warn); }
       }catch(e){ fail++; twPush('┗━ ❌ '+e.message+' (앱 발행봇 실행 확인)',C.err); }
     }
-    twPush('━━━━━ 🪪 프로필 세팅 종료 · 완료 '+ok+' · 실패 '+fail+' ━━━━━',fail===0?C.ok:C.warn);
+    twPush('━━━━━ 🪪 개설+프로필 종료 · 완료 '+ok+' · 실패 '+fail+' ━━━━━',fail===0?C.ok:C.warn);
     b.disabled=false; twLoad();
   };
 
@@ -1164,6 +1237,7 @@
       twPost={title,content:body,tags:tagM?tagM[1].trim():''};
       $('twTitle').textContent=title;
       $('twBody').textContent=body;
+      $('twCharCount').textContent='📄 '+body.length+'자';
       $('twTags').textContent=twPost.tags?twPost.tags.split(',').map(t=>'#'+t.replace('#','').trim()).join(' '):'';
       twPreviewState('done');
     }catch(e){ alert('글 생성 실패: '+e.message); twPreviewState('empty'); }
@@ -1199,8 +1273,12 @@
       if(!lr.ok||!ld.success) return {ok:false,at:'로그인',err:ld.error||'로그인 실패'};
       twPush('로그인 성공 · 블로그 '+(ld.blogId||'?'),C.ok);
     } else twPush('기존 세션 사용',C.step);
-    // 2) 카테고리
+    // 2) 블로그 존재 확인 — 없으면 발행 대상 없음(이미지 만들기 전에 먼저 체크, 순서 중요)
+    twPush('블로그 개설 여부 확인 중…',C.step);
     let cats=[]; try{ const cr=await fetch(BOT+'/api/naver/categories/'+userId); const cd=await cr.json(); if(cd.categories?.length) cats=cd.categories; }catch(e){}
+    if(!cats.length){
+      return {ok:false,at:'블로그',err:'블로그가 없거나 카테고리를 못 읽었어요 → 🌱육성 탭에서 블로그 개설·프로필 먼저 하세요'};
+    }
     const cat=cats[0]||{};
     // 3) 이미지 생성 (원터치 방식) — Flow=CDP 크롬(9322+slot), AI=봇 replicate. 계정마다 새로 생성.
     const wantN=twImg==='none'?0:twImgCount;

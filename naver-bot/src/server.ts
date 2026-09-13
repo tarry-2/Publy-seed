@@ -7,6 +7,7 @@ import { saveNaverSession, publishNaver, activateNaverAccount, naverSessionExist
 import { saveTistorySession, publishTistory, tistorySessionExists, deleteTistorySession } from "./tistory";
 import { fetchPendingJobs, updateJob, claimPendingJob, finishQueuedHistory, useQuota, refundQuota, checkPublishEntitlement, incrementDailyPublish } from "./supabase";
 import { acquireAccountLock } from "./account-lock";
+import { getProxyForNationality, stickifyDataImpulse, maskProxy } from "./proxy";
 
 /* ── 봇 자체 로그 파일 (버그 신고용) ──
    메인 프로세스가 아니라 "봇 프로세스가 자기 로그를 직접" 쓴다. 봇은 별도 프로세스라
@@ -228,26 +229,71 @@ app.post("/api/flow/launch", async (req, res) => {
 
 /* ── 🌱 프로필 자동 세팅 (계정 육성) ── */
 app.post("/api/profile-setup", async (req, res) => {
-  const { userId, blogName, bio, profileImageUrl, showWindow, useProxy } = req.body || {};
+  const { userId, blogName, nickname, bio, profileImageUrl, blogDomain, topic, targetKeyword, showWindow, useProxy } = req.body || {};
   if (!userId) return res.status(400).json({ ok: false, error: "userId 필요" });
   const logs: string[] = [];
   try {
-    const r = await setupNaverProfile({ userId, blogName, bio, profileImageUrl, showWindow: showWindow === true || showWindow === "true", useProxy: useProxy === true || useProxy === "true", onLog: (m) => { logs.push(m); console.log(m); } });
+    const r = await setupNaverProfile({ userId, blogName, nickname, bio, profileImageUrl, blogDomain, topic, targetKeyword, showWindow: showWindow === true || showWindow === "true", useProxy: useProxy === true || useProxy === "true", onLog: (m) => { logs.push(m); console.log(m); } });
     res.json({ ...r, logs });
   } catch (e: any) {
     res.status(500).json({ ok: false, error: e?.message, logs });
   }
 });
 
+/* ── 🆕 가입용 프록시 크롬창 — 버튼 누르면 프록시 걸린 창 + 네이버 회원가입 페이지 ──
+   네이버 가입은 SMS 인증 때문에 완전 자동 불가 → 사람이 직접 가입하되, IP는 프록시로 나가게.
+   계정마다 다른 IP로 가입(대량생성 딱지 회피). playwright chromium을 프록시 옵션으로 띄운다
+   (DataImpulse는 id/pw 인증이라 시스템 크롬 커맨드라인 프록시로는 안 됨).
+   ★기존 코드와 독립. 브라우저 참조를 전역 배열에 보관해 GC/종료로 창 안 닫히게. */
+const signupBrowsers: any[] = [];
+app.post("/api/signup/launch", async (req, res) => {
+  const nationality = (req.body?.nationality === "foreign") ? "foreign" : "kr";
+  // 회원가입 진입점 = 약관동의 화면. `?m=agree&token=`은 약관동의 제출 후 서버가 발급한 token이 필요한
+  // 다음 단계라 직접 진입하면 네이버가 404("페이지를 찾을 수 없습니다")를 준다. 그냥 /user2/join 이 정상 시작.
+  const joinUrl = "https://nid.naver.com/user2/join";
+  try {
+    const p = stickifyDataImpulse(await getProxyForNationality(nationality as any));
+    if (!p || !p.server) return res.status(400).json({ ok: false, error: "프록시가 없어요. 관리자 🌐프록시 탭에서 먼저 등록/충전하세요. (프록시 없이 가입하면 대량생성으로 걸립니다)" });
+    const browser = await chromium.launch({
+      headless: false,
+      args: ["--start-maximized", "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"],
+      proxy: { server: p.server, username: p.username, password: p.password },
+    });
+    signupBrowsers.push(browser);
+    // 창 닫히면 배열에서 제거(메모리 정리)
+    browser.on("disconnected", () => { const i = signupBrowsers.indexOf(browser); if (i >= 0) signupBrowsers.splice(i, 1); });
+    const ctx = await browser.newContext({ viewport: null, locale: "ko-KR", timezoneId: "Asia/Seoul" });
+    const page = await ctx.newPage();
+    // 나가는 IP 먼저 확인(창에 잠깐 보여줌) → 가입 페이지로
+    let outIp = "?";
+    try { await page.goto("https://api.ipify.org?format=json", { timeout: 20000 }); outIp = (await page.evaluate(() => document.body.innerText).catch(() => "?")); } catch {}
+    await page.goto(joinUrl, { waitUntil: "domcontentloaded", timeout: 30000 }).catch(() => {});
+    console.log(`[가입창] 프록시 ${maskProxy(p)} · 나가는IP ${outIp}`);
+    return res.json({ ok: true, proxy: maskProxy(p), outIp });
+  } catch (e: any) {
+    return res.status(500).json({ ok: false, error: "가입 창 실행 실패: " + (e?.message || e) });
+  }
+});
+
 /* ── 🌐 프록시 검사 — 그 프록시로 실제 접속해 나가는 IP·응답시간 확인 ── */
 app.post("/api/proxy/check", async (req, res) => {
-  const { server, username, password } = req.body || {};
-  if (!server) return res.status(400).json({ ok: false, error: "server 필요" });
-  const srv = /^(https?|socks[45]?):\/\//i.test(server) ? server : `http://${server}`;
+  const { server, username, password, useDefault } = req.body || {};
   const t0 = Date.now();
+  // 상태등용: useDefault면 기본 프록시(gs_proxies/default)로 살아있는지 확인
+  let srv: string, user: string | undefined, pass: string | undefined;
+  if (useDefault) {
+    const p = stickifyDataImpulse(await getProxyForNationality("kr"));
+    if (!p || !p.server) return res.json({ ok: false, error: "기본 프록시 없음" });
+    srv = /^(https?|socks[45]?):\/\//i.test(p.server) ? p.server : `http://${p.server}`;
+    user = p.username; pass = p.password;
+  } else {
+    if (!server) return res.status(400).json({ ok: false, error: "server 필요" });
+    srv = /^(https?|socks[45]?):\/\//i.test(server) ? server : `http://${server}`;
+    user = username || undefined; pass = password || undefined;
+  }
   let browser: any = null;
   try {
-    browser = await chromium.launch({ headless: true, proxy: { server: srv, username: username || undefined, password: password || undefined } });
+    browser = await chromium.launch({ headless: true, proxy: { server: srv, username: user, password: pass } });
     const page = await browser.newPage();
     await page.goto("https://api.ipify.org?format=json", { timeout: 15000, waitUntil: "domcontentloaded" });
     const txt = await page.evaluate(() => document.body.innerText);

@@ -101,6 +101,18 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem("publy_theme", theme); }, [theme]);
 
+  // 관리자 iframe(admin/index.html) 헤더 버튼 → postMessage 수신: 회원화면 이동 / iframe 최신반영
+  useEffect(() => {
+    const onMsg = (e: MessageEvent) => {
+      const d: any = e.data;
+      if (!d || d.type !== "gs-admin-nav") return;
+      if (d.action === "dashboard") setView("dashboard");
+      else if (d.action === "reload") setAdminFrameKey(Date.now());
+    };
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, []);
+
   function toggleTheme() { setTheme(t => t === "dark" ? "light" : "dark"); }
 
   function handleLogin(u: PublyUser) {
@@ -177,18 +189,13 @@ export default function App() {
   //   ★경로: dev(http)는 절대경로 `/admin/index.html`(vite dev server가 서빙), 설치본(file://)은
   //     상대경로 `admin/index.html`. file://에서 `/admin/...`는 파일시스템 루트로 풀려 404=백지가 됨.
   const adminSrc = `${typeof location!=="undefined" && location.protocol==="file:" ? "" : "/"}admin/index.html?t=${adminFrameKey}`;
+  //   ★회원화면/최신반영 버튼은 관리자 헤더("골든시드 관리자" 글자 옆) 안에 있고(admin/index.html),
+  //     클릭 시 postMessage로 여기에 신호를 보낸다(아래 useEffect 리스너). iframe 위에 오버레이로 얹지 않음
+  //     (얹으면 관리자 우측 테마버튼을 가림 — 테리 지적).
   if (view==="admin-login" || view==="admin") return (
-    <div style={{ width:"100vw", height:"100vh", position:"relative" }}>
+    <div style={{ width:"100vw", height:"100vh" }}>
       {/* 캐시버스터(?t)+key — key를 바꿔 iframe을 아예 새로 마운트(src만 바꾸면 리로드 안 돼 옛 화면 남음) */}
       <iframe key={adminFrameKey} id="gs-admin-frame" src={adminSrc} title="골든시드 관리자" style={{ width:"100%", height:"100%", border:"none" }} />
-      <div style={{ position:"fixed", top:10, right:16, zIndex:9999, display:"flex", gap:6 }}>
-        <button onClick={() => setView("dashboard")}
-          style={{ padding:"6px 12px", borderRadius:8, border:"1px solid rgba(0,0,0,.15)", background:"rgba(255,255,255,.9)", color:"#333", fontSize:12, fontWeight:700, cursor:"pointer" }}
-        >← 회원 화면</button>
-        <button onClick={() => setAdminFrameKey(Date.now())}
-          style={{ padding:"6px 12px", borderRadius:8, border:"1px solid rgba(0,0,0,.15)", background:"rgba(255,255,255,.9)", color:"#333", fontSize:12, fontWeight:700, cursor:"pointer" }}
-        >🔄 최신 반영</button>
-      </div>
     </div>
   );
 
