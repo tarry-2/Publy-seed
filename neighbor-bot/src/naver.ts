@@ -76,15 +76,31 @@ async function launchBrowser(
   //   DataImpulse 게이트웨이는 기본(포트 823)이 요청마다 IP 로테이션 → 방문 도중에도 IP가 바뀌어 네이버가 봇으로 의심+렉.
   //   해결: 유입 방문마다 새 세션ID(sessid)를 username에 붙이고 sticky 포트(10000)로 접속 → 이 방문은 IP 하나로 고정,
   //         다음 방문(새 launchBrowser)은 새 sessid → 완전히 다른 IP. sessttl=한 방문 도는 시간 넉넉히(10분).
-  if (proxy && opts.feature === "inflow" && /dataimpulse/i.test(proxy.server) && proxy.username) {
-    const sess = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  if (proxy && /dataimpulse/i.test(proxy.server) && proxy.username) {
     const baseUser = proxy.username.replace(/;sess(id|ttl)\.[^;]*/g, "");   // 혹시 남은 세션 파라미터 제거(중복 방지)
-    proxy = {
-      server: proxy.server.replace(/:\d+$/, ":10000"),   // 823(로테이팅) → 10000(sticky)
-      username: `${baseUser};sessid.${sess};sessttl.10`,
-      password: proxy.password,
-    };
-    opts.log?.(`🔄 이번 방문 전용 IP 세션 발급 — 방문 동안 IP를 고정하고(자연스러움·안정), 다음 방문엔 완전히 다른 IP로 바꿔요(엇갈림)`);
+    let sess: string | null = null, ttl = "10", why = "";
+    if (opts.feature === "inflow") {
+      // 유입 = 방문마다 완전히 다른 IP(엇갈림). 한 방문 안에선 sticky로 고정.
+      sess = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+      why = `🔄 이번 방문 전용 IP 세션 발급 — 방문 동안 IP 고정, 다음 방문엔 완전히 다른 IP(엇갈림)`;
+    } else if (userId) {
+      // 🔴 계정 작업(워밍업·서이추·공감·품앗이·크롤 등)은 그 계정 전용 고정 IP.
+      //   발행(naver-bot accountProxyOpt)과 동일 규칙: 세션의 proxy_sessid 우선, 없으면 "gs"+userId 결정론적.
+      //   → 같은 계정은 발행이든 워밍업이든 항상 같은 한국 IP = 연좌제 밴 방지(테리 불가침).
+      let ps = "";
+      try { ps = String((loadSession(userId) as any)?.proxySessid || "").trim(); } catch {}
+      sess = ps || ("gs" + String(userId).toLowerCase().replace(/[^a-z0-9]/g, ""));
+      ttl = "60";
+      why = `🔒 계정 전용 고정 IP — 발행과 같은 IP로 접속(계정 안전)`;
+    }
+    if (sess) {
+      proxy = {
+        server: proxy.server.replace(/:\d+$/, ":10000"),   // 823(로테이팅) → 10000(sticky)
+        username: `${baseUser};sessid.${sess};sessttl.${ttl}`,
+        password: proxy.password,
+      };
+      opts.log?.(why);
+    }
   }
   if (proxy) {
     const masked = (() => {

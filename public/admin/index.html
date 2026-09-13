@@ -399,7 +399,7 @@
               <div class="tw-panel">
                 <div class="tw-panel-h">🌐 프록시 <span class="muted" style="font-weight:600">— 계정마다 다른 한국 IP(연좌제 밴 방지)</span></div>
                 <!-- 발행 시 프록시 사용 토글(클릭=켜기/끄기, 상태 명확히) -->
-                <button class="btn sm" id="twUseProxy" style="width:100%;margin-bottom:8px">⚪ 프록시 안 씀 (내 IP) — 눌러서 켜기</button>
+                <button class="btn sm gold" id="twUseProxy" style="width:100%;margin-bottom:8px">🌐 계정 고정 IP 항상 ON (자동·안전, 끌 수 없음)</button>
                 <div class="muted" style="font-size:11px;line-height:1.5;margin-bottom:12px;padding:8px 10px;border-radius:8px;background:var(--panel);border:1px solid var(--line)">켜면 각 계정 발행이 <b>한국 프록시 IP</b>를 경유해요(gs_proxies에서 부하분산 자동 배정). 계정 수백~수천 개면 <b>필수</b>(같은 IP=연좌제 밴).</div>
                 <!-- 프록시 등록 -->
                 <div style="font-size:12px;font-weight:800;margin-bottom:6px">➕ 프록시 등록</div>
@@ -962,8 +962,8 @@
   $('twGemToggle').onclick=()=>{ const b=$('twGemBody'),a=$('twGemArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twGemTag').textContent=o?'▶ 펴기':'▼ 접기'; };
   $('twFlowToggle').onclick=()=>{ const b=$('twFlowBody'),a=$('twFlowArrow'); const o=b.style.display!=='none'; b.style.display=o?'none':'block'; a.textContent=o?'▶':'▼'; $('twFlowTag').textContent=o?'▶ 펴기':'▼ 접기'; };
   // ── 🌐 프록시 (gs_proxies 직접 — 회원앱 봇도 anon으로 읽는 테이블) ──
-  let twUseProxy=false;
-  $('twUseProxy').onclick=()=>{ twUseProxy=!twUseProxy; const b=$('twUseProxy'); b.textContent='🌐 발행 시 프록시 사용 '+(twUseProxy?'ON':'OFF'); b.classList.toggle('gold',twUseProxy); };
+  let twUseProxy=true;   // 🔴 계정 고정 IP 항상 ON — 봇이 useProxy 무시하고 무조건 계정 고정 프록시(맨IP 계정=연좌제 밴). UI로 못 끔.
+  $('twUseProxy').onclick=()=>{};   // 토글 불가(항상 ON 고정)
   async function pxLoad(){
     const box=$('pxList');
     const {data,error}=await sb.rpc('gs_proxy_list',{p_token:TOKEN});

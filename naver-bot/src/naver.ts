@@ -397,12 +397,10 @@ export async function setupNaverProfile(params: {
     let blogId = session.blogId || session.loginId || "";
     log(`[프로필] 🌱 세팅 시작 — 계정 ${userId} · 블로그 ${blogId}`);
 
-    let proxyOpt: any = undefined;
-    if (useProxy) {
-      // ★계정 전용 고정 IP: gs_accounts.proxy_sessid(=session.proxySessid) 우선, 없으면 SQL 자동발급과 같은 규칙(gs+login) 재현.
-      const accSessid = (session?.proxySessid && String(session.proxySessid).trim()) || ("gs" + String(userId).toLowerCase().replace(/[^a-z0-9]/g, ""));
-      try { const p = stickifyDataImpulse(await getProxyForNationality("kr"), accSessid); if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; log(`[프로필] 🌐 프록시(계정고정) ${maskProxy(p)}`); } } catch {}
-    }
+    // 🔴 계정 작업은 useProxy 무시하고 무조건 계정 고정 프록시 — 맨IP로 계정 열면 연좌제 밴(테리 불가침).
+    const proxyOpt = await accountProxyOpt(userId, session);
+    if (proxyOpt) log(`[프로필] 🌐 프록시(계정고정) ${maskProxy(proxyOpt as any)}`);
+    else log("[프로필] ⚠️ 프록시 없음 — 계정 위험(관리자 🌐프록시 등록 필요)");
     browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 60 : 0, proxy: proxyOpt });
     const context = await browser.newContext();
     await context.addCookies(cookies);
@@ -734,17 +732,12 @@ export async function publishNaver(params: {
   }
 
   let closingExpected = false;
-  // 🌐 프록시(계정농사 밴 방지) — 계정마다 다른 한국 IP. gs_proxies 재사용(youtube-bot 로직). DataImpulse면 방문당 sticky.
-  let proxyOpt: { server: string; username?: string; password?: string } | undefined = undefined;
-  if (useProxy) {
-    try {
-      // ★계정 전용 고정 IP: 같은 계정은 항상 같은 IP로 발행(연좌제 밴 방지). SQL 자동발급 규칙(gs+login)과 일치.
-      const accSessid = "gs" + String(userId).toLowerCase().replace(/[^a-z0-9]/g, "");
-      const p = stickifyDataImpulse(await getProxyForNationality("kr"), accSessid);
-      if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; console.log(`[naver] 🌐 프록시 경유(계정고정): ${maskProxy(p)}`); }
-      else console.log(`[naver] 🌐 프록시 미배정 — 내 IP로 발행(gs_proxies 등록 필요)`);
-    } catch (e: any) { console.log(`[naver] 🌐 프록시 조회 실패(${e?.message}) — 내 IP로 발행`); }
-  }
+  // 🔴 발행도 useProxy 무시하고 무조건 계정 고정 프록시 — 프로필·워밍업과 같은 IP(proxy_sessid 우선, gs+userId 폴백).
+  //    같은 계정은 발행이든 워밍업이든 항상 같은 한국 IP = 연좌제 밴 방지(테리 불가침).
+  const _pubSession = readSession<any>(naverSessionName(userId), LEGACY_SESSION_DIRS);
+  const proxyOpt = await accountProxyOpt(userId, _pubSession);
+  if (proxyOpt) console.log(`[naver] 🌐 발행 프록시(계정고정): ${maskProxy(proxyOpt as any)}`);
+  else console.log(`[naver] ⚠️ 발행 프록시 없음 — 계정 위험(관리자 🌐프록시 등록 필요)`);
   // 🪟 창 보기 ON=실제 창 뜸 / OFF=백그라운드(headless). 백그라운드여도 onShot으로 진행 캡처를 로그에 보냄.
   const browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 50 : 0, proxy: proxyOpt });
   const abortPublish = () => {
