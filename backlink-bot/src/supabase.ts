@@ -6,8 +6,9 @@ if (typeof (globalThis as any).WebSocket === "undefined") {
   (globalThis as any).WebSocket = WebSocket;
 }
 
-const SUPABASE_URL = "https://qhhoyxexxlimbjrbwrgq.supabase.co";
-const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoaG95eGV4eGxpbWJqcmJ3cmdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTMzOTQsImV4cCI6MjA5Mjg4OTM5NH0.pw_qUR0oOxgt82S_DA6GTka3WP0JBu2vmWuKZ9VvTKM";
+// ★골든시드 전용 DB(nnujeo). 발행앱에서 기능(코드)만 복제 — 딸려온 발행앱 DB 주소를 바로잡음(절대 안 섞음).
+const SUPABASE_URL = "https://nnujeovecnmestvfoiqt.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5udWplb3ZlY25tZXN0dmZvaXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMTY1OTEsImV4cCI6MjEwNDU5MjU5MX0.hpgSAFqATfQKDzccpz40eIRxHu64ONsojQ4dY73-Abg";
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 

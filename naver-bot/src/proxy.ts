@@ -85,13 +85,18 @@ async function getDefaultProxy(): Promise<ProxyConfig | null> {
    트래픽 launchBrowser의 검증 로직 그대로: 823(로테이팅) → 10000(sticky),
    username에 sessid/sessttl 붙여 이번 방문은 IP 하나로 고정, 다음 방문은 새 sessid.
    DataImpulse가 아니면(다른 프록시) 원본 그대로 반환. */
-export function stickifyDataImpulse(proxy: ProxyConfig | null): ProxyConfig | null {
+// fixedSessid: 계정 전용 세션ID(gs_accounts.proxy_sessid). 주면 그 계정은 "항상 같은 IP"로 접속(연좌제 밴 방지).
+//   안 주면(가입창 등 계정 없는 경우) 기존처럼 매번 랜덤 IP. sessttl도 고정계정은 길게(1440분=24h) 잡아 안정 유지.
+export function stickifyDataImpulse(proxy: ProxyConfig | null, fixedSessid?: string): ProxyConfig | null {
   if (!proxy || !/dataimpulse/i.test(proxy.server) || !proxy.username) return proxy;
-  const sess = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const sess = (fixedSessid && fixedSessid.trim())
+    ? fixedSessid.trim().replace(/[^a-zA-Z0-9]/g, "")           // 계정 고정값(영숫자만)
+    : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;  // 계정 없으면 랜덤
+  const ttl = (fixedSessid && fixedSessid.trim()) ? 1440 : 10;  // 고정계정=24h 유지, 랜덤=10분
   const baseUser = proxy.username.replace(/;sess(id|ttl)\.[^;]*/g, ""); // 중복 세션 파라미터 제거
   return {
     server: proxy.server.replace(/:\d+$/, ":10000"),
-    username: `${baseUser};sessid.${sess};sessttl.10`,
+    username: `${baseUser};sessid.${sess};sessttl.${ttl}`,
     password: proxy.password,
   };
 }

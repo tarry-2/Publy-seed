@@ -383,7 +383,9 @@ export async function setupNaverProfile(params: {
 
     let proxyOpt: any = undefined;
     if (useProxy) {
-      try { const p = stickifyDataImpulse(await getProxyForNationality("kr")); if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; log(`[프로필] 🌐 프록시 ${maskProxy(p)}`); } } catch {}
+      // ★계정 전용 고정 IP: gs_accounts.proxy_sessid(=session.proxySessid) 우선, 없으면 SQL 자동발급과 같은 규칙(gs+login) 재현.
+      const accSessid = (session?.proxySessid && String(session.proxySessid).trim()) || ("gs" + String(userId).toLowerCase().replace(/[^a-z0-9]/g, ""));
+      try { const p = stickifyDataImpulse(await getProxyForNationality("kr"), accSessid); if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; log(`[프로필] 🌐 프록시(계정고정) ${maskProxy(p)}`); } } catch {}
     }
     browser = await chromium.launch({ headless: !showWindow, args: showWindow ? [...LAUNCH_ARGS, "--start-maximized"] : LAUNCH_ARGS, slowMo: showWindow ? 60 : 0, proxy: proxyOpt });
     const context = await browser.newContext();
@@ -460,44 +462,8 @@ export async function setupNaverProfile(params: {
     if (!(await page.locator("#papername").count().catch(() => 0))) {
       for (const fr of page.frames()) { try { if (await fr.locator("#papername").count()) { scope = fr; break; } } catch {} }
     }
-    const fillField = async (sel: string, val: string, label: string) => {
-      try {
-        const el = scope.locator(sel).first();
-        if (await el.count()) { await el.click({ clickCount: 3 }); await el.fill(""); await el.pressSequentially(val, { delay: 25 }); changed.push(label); log(`[프로필] ✅ ${label}: ${val.slice(0, 30)}`); return true; }
-        log(`[프로필] ⚠️ ${label} 입력칸(${sel}) 못 찾음`); return false;
-      } catch (e: any) { log(`[프로필] ⚠️ ${label}: ${e?.message}`); return false; }
-    };
-    // 블로그명(#papername) · 별명(#frmNickname) · 소개(#frmIntroduce)
-    if (blogName && blogName.trim()) await fillField("#papername", blogName.trim(), "블로그명");
-    const nk = (nickname && nickname.trim()) ? nickname.trim() : (blogName || "").trim();
-    if (nk) await fillField("#frmNickname", nk, "별명");
-    // 소개: 지정값 없으면 주제 매칭 랜덤(온종일팜·산지직송 편중 없이 다양하게)
-    const introText = (bio && bio.trim()) ? bio.trim() : genBlogIntro(topic);
-    if (introText) await fillField("#frmIntroduce", introText, "소개");
-
-    // 내 블로그 주제(paperSubjectSeq) — ★커스텀 select라 드롭다운이 클릭으로 잘 안 열림 →
-    //   JS로 라디오 checked+change 직접 설정(폼 제출 시 이 값이 서버로 감) + 버튼 텍스트 갱신.
-    const subjCode = TOPIC_NAVER_SUBJECT[topic];
-    if (subjCode) {
-      try {
-        const set = await scope.evaluate((code: string) => {
-          const r = document.querySelector(`input[name=paperSubjectSeq][value='${code}']`) as HTMLInputElement | null;
-          if (!r) return false;
-          r.checked = true;
-          r.dispatchEvent(new Event("input", { bubbles: true }));
-          r.dispatchEvent(new Event("change", { bubbles: true }));
-          r.dispatchEvent(new Event("click", { bubbles: true }));
-          const lbl = document.querySelector(`label[for='${r.id}']`);
-          const btn = document.querySelector("#subject_btn");
-          if (lbl && btn) btn.textContent = (lbl.textContent || "").trim();
-          return true;
-        }, subjCode);
-        if (set) { changed.push("주제"); log(`[프로필] ✅ 주제: ${topic}(코드 ${subjCode})`); await page.waitForTimeout(400); }
-        else log(`[프로필] ⚠️ 주제 라디오(value=${subjCode}) 못 찾음`);
-      } catch (e: any) { log(`[프로필] ⚠️ 주제: ${e?.message}`); }
-    }
-
     // 프로필 사진: 지정 URL > Flow 이미지 풀(주제 매칭). ★'등록'(#_btnProfileImageUpload)=filechooser 방식.
+    //   사진은 폼 hidden(img_path/image)을 채우므로 아래 fetch 저장 "전에" 먼저 업로드해야 같이 전송됨.
     {
       let imgPath: string | null = null, isTmp = false;
       if (profileImageUrl && profileImageUrl.trim()) { imgPath = await downloadImageToTemp(profileImageUrl.trim()).catch(() => null); isTmp = !!imgPath; }
@@ -511,25 +477,55 @@ export async function setupNaverProfile(params: {
           await fc.setFiles(imgPath);
           changed.push("프로필사진"); log(`[프로필] ✅ 프로필 사진(${topic}): ${path.basename(imgPath)}`);
           await page.waitForTimeout(3500); // 업로드+161px 썸네일 처리
-          // 편집/적용 팝업 있으면 확인
           for (const s of ["button:has-text('적용')", "button:has-text('확인')", "a:has-text('적용')"]) { try { const el = scope.locator(s).first(); if (await el.count() && await el.isVisible()) { await el.click(); await page.waitForTimeout(1200); break; } } catch {} }
-          // 네이버 프로필에도 적용 체크(선택)
-          try { const c = scope.locator("input[type=checkbox]#chk1, input[name=notifyNaverProfile]").first(); if (await c.count() && !(await c.isChecked())) await c.check({ force: true }); } catch {}
         } catch (e: any) { log(`[프로필] ⚠️ 프로필 사진 실패(filechooser): ${e?.message}`); }
         if (isTmp) try { fs.unlinkSync(imgPath); } catch {}
       } else log(`[프로필] ℹ️ 프로필 사진 풀 비어있음(classify-profile-images 먼저 실행)`);
     }
 
-    // 저장 — ★실측 확정: 폼 하단 input[type=button][value=확인]
-    if (changed.some(c => ["블로그명", "별명", "소개", "프로필사진"].includes(c))) {
-      let saved = false;
-      for (const s of ["input[type=button][value='확인']", "input[type=submit][value='확인']", "button:has-text('확인')", "a:has-text('확인')"]) {
-        try { const el = scope.locator(s).first(); if (await el.count() && await el.isVisible()) { await el.click(); saved = true; log(`[프로필] 💾 저장(확인) 클릭`); break; } } catch {} }
-      if (!saved) log(`[프로필] ⚠️ 저장(확인) 버튼 못 찾음(입력은 됨)`);
-      await page.waitForTimeout(2500);
-      // 저장 확인 alert/모달 있으면 수락
-      for (const s of ["button:has-text('확인')", "#confirmSubmitBtn"]) { try { const el = scope.locator(s).first(); if (await el.count() && await el.isVisible()) { await el.click(); await page.waitForTimeout(800); break; } } catch {} }
+    // ── 저장 = ★진짜 저장 API로 fetch POST(2026-09-13 실측 확정) ──
+    //   커스텀 select 위젯(subject_btn)은 자동화 브라우저에서 안 열리고, 확인버튼 클릭도 POST를 안 냄.
+    //   네이버 위젯 JS(_doSubmit)를 뜯어 보니 실제 저장 URL은 AdminUserBasicUpdate.naver(404)가 아니라
+    //   `/UserBasicInfoUpdateAsync.naver?blogId=X` (AJAX). cgiform 전체 필드를 이 URL로 fetch하면
+    //   블로그명·별명·소개·주제까지 전부 서버 반영됨({"isSuccess":"success"}). 위젯 조작 불필요.
+    const nk = (nickname && nickname.trim()) ? nickname.trim() : (blogName || "").trim();
+    const introText = (bio && bio.trim()) ? bio.trim() : genBlogIntro(topic);
+    const subjCode = TOPIC_NAVER_SUBJECT[topic];
+    const saveRes = await scope.evaluate(async (args: { blogId: string; blogName: string; nick: string; intro: string; subj: string }) => {
+      const f = (document.querySelector("#cgiform") || document.forms[0]) as HTMLFormElement | null;
+      if (!f) return { ok: false, msg: "cgiform 없음" };
+      const fd = new URLSearchParams();
+      f.querySelectorAll("input,select,textarea").forEach((elm: any) => {
+        const name = elm.name; if (!name) return;
+        if (elm.type === "radio") { if (elm.value === args.subj) { elm.checked = true; fd.set(name, elm.value); } return; }
+        if (elm.type === "checkbox") { if (elm.checked) fd.set(name, elm.value); return; }
+        if (elm.type === "submit" || elm.type === "button") return;
+        fd.set(name, elm.value ?? "");
+      });
+      if (args.blogName) fd.set("papername", args.blogName);
+      if (args.nick) fd.set("nickname", args.nick);
+      if (args.intro) fd.set("introduce", args.intro);
+      if (args.subj) fd.set("paperSubjectSeq", args.subj);
+      try {
+        const r = await fetch(`/UserBasicInfoUpdateAsync.naver?blogId=${encodeURIComponent(args.blogId)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "X-Requested-With": "XMLHttpRequest" },
+          body: fd.toString(),
+          credentials: "include",
+        });
+        const txt = await r.text();
+        let ok = false; try { ok = JSON.parse(txt).isSuccess === "success"; } catch { ok = /success|성공/.test(txt); }
+        return { ok, status: r.status, msg: txt.slice(0, 120) };
+      } catch (e: any) { return { ok: false, msg: e?.message }; }
+    }, { blogId, blogName: (blogName || "").trim(), nick: nk, intro: introText, subj: subjCode || "" });
+
+    if (saveRes.ok) {
+      changed.push("블로그명", "별명", "소개"); if (subjCode) changed.push("주제");
+      log(`[프로필] 💾✅ 저장 성공(fetch API): ${blogName || ""} / 주제 ${topic}(${subjCode})`);
+    } else {
+      log(`[프로필] ❌ 저장 실패(fetch): status=${(saveRes as any).status} ${saveRes.msg}`);
     }
+    await page.waitForTimeout(1000);
 
     await browser.close();
     const ok = changed.length > 0;
@@ -724,8 +720,10 @@ export async function publishNaver(params: {
   let proxyOpt: { server: string; username?: string; password?: string } | undefined = undefined;
   if (useProxy) {
     try {
-      const p = stickifyDataImpulse(await getProxyForNationality("kr"));
-      if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; console.log(`[naver] 🌐 프록시 경유: ${maskProxy(p)}`); }
+      // ★계정 전용 고정 IP: 같은 계정은 항상 같은 IP로 발행(연좌제 밴 방지). SQL 자동발급 규칙(gs+login)과 일치.
+      const accSessid = "gs" + String(userId).toLowerCase().replace(/[^a-z0-9]/g, "");
+      const p = stickifyDataImpulse(await getProxyForNationality("kr"), accSessid);
+      if (p?.server) { proxyOpt = { server: p.server, username: p.username, password: p.password }; console.log(`[naver] 🌐 프록시 경유(계정고정): ${maskProxy(p)}`); }
       else console.log(`[naver] 🌐 프록시 미배정 — 내 IP로 발행(gs_proxies 등록 필요)`);
     } catch (e: any) { console.log(`[naver] 🌐 프록시 조회 실패(${e?.message}) — 내 IP로 발행`); }
   }

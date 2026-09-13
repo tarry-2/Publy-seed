@@ -22,9 +22,10 @@ const app = express();
 const PORT = Number(process.env.PUBLY_BOT_PORT) || 3374;
 const AUTH_TOKEN = process.env.BOT_AUTH_TOKEN || "";
 
-// 퍼블리 Supabase 재사용(백링크는 backlink_* 테이블만 씀). 봇=관리자 권한 → RPC에 admin 토큰 전달.
-const SB_URL = "https://qhhoyxexxlimbjrbwrgq.supabase.co";
-const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFoaG95eGV4eGxpbWJqcmJ3cmdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzczMTMzOTQsImV4cCI6MjA5Mjg4OTM5NH0.pw_qUR0oOxgt82S_DA6GTka3WP0JBu2vmWuKZ9VvTKM";
+// ★골든시드 전용 DB(nnujeo). 백링크는 backlink_* 테이블만 씀. 봇=관리자 권한 → RPC에 admin 토큰 전달.
+//   발행앱에서 기능(코드)만 복제 — 딸려온 발행앱 DB 주소를 골든시드 전용으로 바로잡음(절대 안 섞음).
+const SB_URL = "https://nnujeovecnmestvfoiqt.supabase.co";
+const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5udWplb3ZlY25tZXN0dmZvaXF0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMTY1OTEsImV4cCI6MjEwNDU5MjU5MX0.hpgSAFqATfQKDzccpz40eIRxHu64ONsojQ4dY73-Abg";
 const sb = createClient(SB_URL, SB_KEY);
 
 // config(gist 토큰 등) 읽기 — Edge의 getConfig와 동일 폴백.
