@@ -174,12 +174,14 @@ export default function App() {
 
   // 🌱 로고 7번 탭 → 골든시드 관리자(public/admin/index.html)를 그대로 띄운다.
   //   골든시드 관리자 자체가 로그인+대시보드(주문승인·회원관리·발급·계정농사 컨트롤타워)를 다 가짐.
-  //   ※ /admin/ 는 앱 라우팅이 가로채므로 반드시 /admin/index.html 로 로드.
+  //   ★경로: dev(http)는 절대경로 `/admin/index.html`(vite dev server가 서빙), 설치본(file://)은
+  //     상대경로 `admin/index.html`. file://에서 `/admin/...`는 파일시스템 루트로 풀려 404=백지가 됨.
+  const adminSrc = `${typeof location!=="undefined" && location.protocol==="file:" ? "" : "/"}admin/index.html?t=${adminFrameKey}`;
   if (view==="admin-login" || view==="admin") return (
     <div style={{ width:"100vw", height:"100vh", position:"relative" }}>
-      {/* 캐시버스터(?t) — 진입/새로고침마다 최신 index.html 강제 로드(iframe 캐시로 옛 화면 뜨는 것 방지) */}
-      <iframe id="gs-admin-frame" src={`/admin/index.html?t=${adminFrameKey}`} title="골든시드 관리자" style={{ width:"100%", height:"100%", border:"none" }} />
-      <div style={{ position:"fixed", top:10, left:84, zIndex:9999, display:"flex", gap:6 }}>
+      {/* 캐시버스터(?t)+key — key를 바꿔 iframe을 아예 새로 마운트(src만 바꾸면 리로드 안 돼 옛 화면 남음) */}
+      <iframe key={adminFrameKey} id="gs-admin-frame" src={adminSrc} title="골든시드 관리자" style={{ width:"100%", height:"100%", border:"none" }} />
+      <div style={{ position:"fixed", top:10, right:16, zIndex:9999, display:"flex", gap:6 }}>
         <button onClick={() => setView("dashboard")}
           style={{ padding:"6px 12px", borderRadius:8, border:"1px solid rgba(0,0,0,.15)", background:"rgba(255,255,255,.9)", color:"#333", fontSize:12, fontWeight:700, cursor:"pointer" }}
         >← 회원 화면</button>
