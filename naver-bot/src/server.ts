@@ -1,7 +1,11 @@
 import express from "express";
 import cors from "cors";
 import { chromium } from "playwright";
+// 가입창 전용 스텔스: 순정 playwright는 navigator.webdriver=true 등으로 봇 노출 → 네이버가 SMS 발송 차단.
+// patchright + 실제 크롬(channel:chrome) + persistent context면 자동화 지표가 진짜 크롬처럼 위장됨(실측 확정).
+import { chromium as stealthChromium } from "patchright";
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { saveNaverSession, publishNaver, activateNaverAccount, naverSessionExists, generateFlowImages, generateFlowImagesCDP, getNaverCategories, saveGoogleSession, googleSessionExists, deleteNaverSession, deleteGoogleSession, setupNaverProfile } from "./naver";
 import { saveTistorySession, publishTistory, tistorySessionExists, deleteTistorySession } from "./tistory";
@@ -254,16 +258,23 @@ app.post("/api/signup/launch", async (req, res) => {
   try {
     const p = stickifyDataImpulse(await getProxyForNationality(nationality as any));
     if (!p || !p.server) return res.status(400).json({ ok: false, error: "프록시가 없어요. 관리자 🌐프록시 탭에서 먼저 등록/충전하세요. (프록시 없이 가입하면 대량생성으로 걸립니다)" });
-    const browser = await chromium.launch({
+    // ★스텔스 필수: 순정 chromium.launch는 navigator.webdriver=true·plugins=0·window.chrome없음으로 봇 노출
+    //   → 네이버가 SMS 인증 발송을 막음(뱅글뱅글). patchright + 실제 크롬(channel:chrome) + persistent
+    //   context면 webdriver=false·plugins·chrome 진짜값으로 위장돼 SMS 정상 발송(실측: 인니 번호 가입 성공).
+    const userDataDir = path.join(os.tmpdir(), `gs-signup-${Date.now()}`);
+    const ctx = await stealthChromium.launchPersistentContext(userDataDir, {
+      channel: "chrome",
       headless: false,
+      viewport: null,
       args: ["--start-maximized", "--no-first-run", "--no-default-browser-check", "--disable-features=Translate"],
       proxy: { server: p.server, username: p.username, password: p.password },
+      locale: "ko-KR",
+      timezoneId: "Asia/Seoul",
     });
-    signupBrowsers.push(browser);
+    signupBrowsers.push(ctx);
     // 창 닫히면 배열에서 제거(메모리 정리)
-    browser.on("disconnected", () => { const i = signupBrowsers.indexOf(browser); if (i >= 0) signupBrowsers.splice(i, 1); });
-    const ctx = await browser.newContext({ viewport: null, locale: "ko-KR", timezoneId: "Asia/Seoul" });
-    const page = await ctx.newPage();
+    ctx.on("close", () => { const i = signupBrowsers.indexOf(ctx); if (i >= 0) signupBrowsers.splice(i, 1); });
+    const page = ctx.pages()[0] || await ctx.newPage();
     // 나가는 IP 먼저 확인(창에 잠깐 보여줌) → 가입 페이지로
     let outIp = "?";
     try { await page.goto("https://api.ipify.org?format=json", { timeout: 20000 }); outIp = (await page.evaluate(() => document.body.innerText).catch(() => "?")); } catch {}
