@@ -24,7 +24,11 @@ const F_MONO = "'JetBrains Mono', ui-monospace, 'SFMono-Regular', monospace";
 
 type Platform = "youtube" | "instagram";
 type Nationality = "kr" | "foreign";
-type Gateway = "instagram" | "facebook" | "direct";
+type Gateway = "instagram" | "facebook" | "direct" | "random";
+// 🎲 랜덤 유입 출처 풀 — 실제로 봇에 넘길 3종(인스타·페북·직접). "random"은 이 중에서 매번 골라 씀.
+const GW_POOL: Exclude<Gateway, "random">[] = ["instagram", "facebook", "direct"];
+const gwLabel = (g: Gateway) =>
+  g === "instagram" ? "인스타 referrer" : g === "facebook" ? "페북 referrer" : g === "random" ? "🎲 3개 랜덤 순환(인스타·페북·직접)" : "직접";
 type LogLine = { t: number; kind: "log" | "ok" | "err" | "sys"; msg: string };
 // 채널 불러오기 영상(봇 fetchChannelVideos 반환과 동일)
 type ChannelVideo = {
@@ -283,6 +287,17 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
   const GH_WINDOW = 30 * 60;                         // 골든아워 = 30분(초)
   const esRef = useRef<BotEventStream | null>(null);
   const jobRef = useRef<string>("");
+  // 🎲 랜덤 게이트웨이 주머니 — 3개를 섞어 순서대로 꺼내고, 다 쓰면 다시 섞는다(=돌아가면서 + 매번 패턴이 바뀜).
+  //   순수 랜덤이면 같은 출처가 연달아 나올 수 있어 "섞은 뒤 한 바퀴 순환" 방식으로 중복을 줄인다.
+  const gwBagRef = useRef<Exclude<Gateway, "random">[]>([]);
+  // gateway가 "random"이면 이번 조회에 쓸 실제 출처를 하나 뽑는다. 그 외엔 선택값 그대로.
+  const pickGateway = (): Exclude<Gateway, "random"> => {
+    if (gateway !== "random") return gateway;
+    if (gwBagRef.current.length === 0) {
+      gwBagRef.current = [...GW_POOL].sort(() => Math.random() - 0.5);   // 새 주머니: 3개 셔플
+    }
+    return gwBagRef.current.shift()!;
+  };
   const logEndRef = useRef<HTMLDivElement | null>(null);
   const schedRef = useRef<{ stop: boolean; timer: any; started: number }>({ stop: false, timer: null, started: 0 });
 
@@ -351,8 +366,8 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
     // ── 디테일 로그(1~N) — 트래픽처럼 단계별로 상세하게 ──
     pushLog("sys", `▶️ 시딩 시작 — ${isYt ? "유튜브" : "인스타"} · 대상 ${chosen.length}개 영상`);
     if (chosen.length === 1) pushLog("log", `🌐 대상 URL: ${chosen[0].url}`);
-    else pushLog("log", `🌐 선택한 ${chosen.length}개 영상을 순차 시딩(🔥골든아워=30분 곡선 / 오래된 영상=쇼츠 조회)`);
-    pushLog("log", `🧭 게이트웨이: ${gateway === "instagram" ? "인스타 referrer" : gateway === "facebook" ? "페북 referrer" : "직접"} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
+    else pushLog("log", `🌐 선택한 ${chosen.length}개 영상을 번갈아(로테이션) 시딩 — 1→2→…→${chosen.length}→1 순환(각 영상에 동시에 골든아워 velocity)`);
+    pushLog("log", `🧭 게이트웨이: ${gwLabel(gateway)} · 국적: ${nationality === "kr" ? "🇰🇷 한국인" : "🌍 외국인"} 계정풀`);
     pushLog("log", `🎯 선택 액션 ${picked.length}종: ${picked.map((d) => `${d.icon}${d.label}×${actions[d.id].qty}`).join(" · ")}`);
     if (visible) pushLog("log", "🚪 창 보기 ON — 봇 브라우저 창을 띄웁니다");
     if (!isYt) pushLog("sys", "ℹ️ 인스타는 비로그인 시 로그인 벽이 있어 조회 카운트가 불확실할 수 있어요(진입·체류는 수행). 계정 연결(STEP2) 후 확실해집니다.");
@@ -370,7 +385,7 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
       const total = actions["view"].qty;
       const goldenN = chosen.filter((c) => c.golden).length;
       const plainN = chosen.length - goldenN;
-      pushLog("sys", `⏱️ 시딩 시작 — 영상당 조회 ${total}회${goldenN ? ` · 🔥골든아워 ${goldenN}개(30분 곡선)` : ""}${plainN ? ` · 📺오래된 ${plainN}개(쇼츠 조회)` : ""}${chosen.length > 1 ? ` · 총 ${chosen.length}개 순차` : ""}`);
+      pushLog("sys", `⏱️ 시딩 시작 — 영상당 조회 ${total}회${goldenN ? ` · 🔥골든아워 ${goldenN}개(30분 곡선)` : ""}${plainN ? ` · 📺오래된 ${plainN}개(쇼츠 조회)` : ""}${chosen.length > 1 ? ` · 총 ${chosen.length}개 번갈아(로테이션)` : ""}`);
       if (viewLimit > 0) pushLog("log", `📊 오늘 사용 ${usedToday.toLocaleString()}/${viewLimit.toLocaleString()}회 · 남음 ${remainQuota.toLocaleString()}회 (한도 도달 시 자동 안내)`);
       runQueue(chosen, total, jobId);
     } else {
@@ -381,27 +396,52 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
     picked.filter((d) => d.id !== "view").forEach((d) => pushLog("log", `⏳ ${d.icon} ${d.label} ×${actions[d.id].qty} — 준비 중(계정 연결 후 실행)`));
   }
 
-  // 🎬 영상 큐 — 선택한 영상들을 하나씩(순차) 골든아워 곡선으로 시딩(안전·티 덜 남)
+  // 🎬 영상 큐 — 선택한 영상들을 번갈아(로테이션) 시딩.
+  //   ★왜 로테이션인가: 골든아워는 '업로드 30분 velocity'인데, 한 영상을 300회 다 조진 뒤
+  //     다음으로 넘기면 끝 영상은 25분+ 밀려 골든아워를 놓친다(테리 지적). → 1→2→…→N→1 순환으로
+  //     N개 영상에 동시에 조회가 깔려 다 같이 노출 신호를 받는다. 봇은 1개라 실제 조회는 순차지만 대상만 번갈아.
+  //   골든아워가 하나라도 있으면 전체 물량을 30분 곡선(scheduleAt)에 얹고, 전부 오래된 영상이면 6~20초 랜덤 텀.
   function runQueue(queue: { url: string; type: "shorts" | "longform"; golden: boolean }[], perVideoTotal: number, jobId: string) {
     setQueueTotal(queue.length);
-    let vi = 0;
-    const runVideo = () => {
+    const done = new Array(queue.length).fill(0);   // 영상별 완료 조회 수
+    const grandTotal = queue.length * perVideoTotal;
+    const anyGolden = queue.some((q) => q.golden);
+    const started = Date.now();
+    schedRef.current = { stop: false, timer: null, started };
+    setGhTarget(grandTotal); setGhDone(0); setGhElapsed(0);
+    let grandDone = 0;
+    let cursor = 0;                                  // 다음에 볼 영상(로테이션 커서)
+
+    const runNext = () => {
       if (schedRef.current.stop) { setRunning(false); return; }
-      if (vi >= queue.length) {
-        pushLog("ok", `🎉 전체 시딩 완료 — 영상 ${queue.length}개 · 조회 ${queue.length * perVideoTotal}회 시딩`);
+      // 🛑 오늘 조회 한도 도달 시 자동 중단(무제한=viewLimit 0은 통과)
+      if (viewLimit > 0 && usedTodayRef.current >= viewLimit) {
+        pushLog("err", `🛑 오늘 조회 한도(${viewLimit.toLocaleString()}회) 도달 — 시딩을 멈춰요. 자정 초기화 또는 등급 상향 후 이어서 하세요.`);
+        schedRef.current.stop = true; setRunning(false); return;
+      }
+      if (grandDone >= grandTotal) {
+        pushLog("ok", `🎉 전체 시딩 완료 — 영상 ${queue.length}개 · 조회 ${grandDone}회 시딩`);
         setRunning(false); return;
       }
+      // 🔄 로테이션: 아직 목표 안 채운 다음 영상을 고른다(다 채운 영상은 건너뜀)
+      let guard = 0;
+      while (done[cursor] >= perVideoTotal && guard < queue.length) { cursor = (cursor + 1) % queue.length; guard++; }
+      const vi = cursor;
       const cur = queue[vi];
-      setQueueIdx(vi + 1);
-      setGhTarget(perVideoTotal); setGhDone(0); setGhElapsed(0); setGhGolden(cur.golden);
-      schedRef.current = { stop: false, timer: null, started: Date.now() };
-      if (queue.length > 1) pushLog("sys", `━━━ 영상 ${vi + 1}/${queue.length} (${cur.golden ? "🔥골든아워 30분 곡선" : "📺 쇼츠 조회"}) 시작 — ${cur.url} ━━━`);
-      const onDone = () => { vi += 1; runVideo(); };
-      // 🔥 골든아워(업로드30분내)=30분 자연곡선, 오래된 영상=곡선 없이 일반 조회 시딩
-      if (cur.golden) runGoldenHour(cur, perVideoTotal, jobId + "_v" + vi, onDone);
-      else runPlainViews(cur, perVideoTotal, jobId + "_v" + vi, onDone);
+      setQueueIdx(vi + 1); setGhGolden(cur.golden);
+      setGhElapsed(Math.floor((Date.now() - started) / 1000));
+      pushLog("sys", `▶️ ${queue.length > 1 ? `영상 ${vi + 1}/${queue.length} · ` : ""}이 영상 ${done[vi] + 1}/${perVideoTotal}회 · 전체 ${grandDone}/${grandTotal} (${cur.golden ? "🔥골든아워" : "📺조회"})`);
+      runOneView(cur, jobId + "_v" + vi + "_" + done[vi], () => {
+        done[vi] += 1; grandDone += 1; setGhDone(grandDone);
+        cursor = (cursor + 1) % queue.length;        // 다음 영상으로 로테이션 전진
+        // 다음 조회까지 대기: 골든아워 있으면 30분 곡선, 없으면 자연 랜덤 텀
+        const wait = anyGolden
+          ? Math.max(0, scheduleAt(grandDone, grandTotal) - (Date.now() - started))
+          : 6000 + Math.floor(Math.random() * 14000);
+        schedRef.current.timer = setTimeout(runNext, wait);
+      });
     };
-    runVideo();
+    runNext();
   }
 
   // ⏱️ 골든아워 곡선 — 30분 창을 n개 조회로 나누되 초반 집중→후반 성김(자연 성장곡선, 레드라인 회피).
@@ -413,65 +453,14 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
     return Math.floor(frac * GH_WINDOW * 0.85 * 1000); // ms
   }
 
-  // 한 영상의 골든아워 곡선 실행(순차). 영상 물량 다 채우면 onVideoDone으로 다음 영상.
-  function runGoldenHour(video: { url: string; type: "shorts" | "longform" }, total: number, jobId: string, onVideoDone: () => void) {
-    let done = 0;
-    const runNext = () => {
-      if (schedRef.current.stop) { setRunning(false); return; }
-      // 🛑 오늘 조회 한도 도달 시 자동 중단(무제한=viewLimit 0은 통과). 실행 중에도 초과 방지.
-      if (viewLimit > 0 && usedTodayRef.current >= viewLimit) {
-        pushLog("err", `🛑 오늘 조회 한도(${viewLimit.toLocaleString()}회) 도달 — 시딩을 멈춰요. 자정 초기화 또는 등급 상향 후 이어서 하세요.`);
-        schedRef.current.stop = true; setRunning(false); return;
-      }
-      if (done >= total) {
-        pushLog("ok", `${queueTotal > 1 ? "  " : ""}✅ 이 영상 골든아워 완료 — 조회 ${done}회`);
-        onVideoDone(); return;
-      }
-      const idx = done;   // 0-based
-      const started = schedRef.current.started;
-      const targetMs = scheduleAt(idx, total);
-      const waitMs = Math.max(0, targetMs - (Date.now() - started));
-      schedRef.current.timer = setTimeout(() => {
-        if (schedRef.current.stop) { setRunning(false); return; }
-        setGhElapsed(Math.floor((Date.now() - started) / 1000));
-        // 📊 몇 번째 시작 / 목표 / 완료 / 남음 — 매번 명확히 표시
-        pushLog("sys", `▶️ ${idx + 1}번째 시작 · 목표 ${total} · 완료 ${done} · 남음 ${total - done}`);
-        runOneView(video, jobId + "_" + idx, () => { done += 1; setGhDone(done); runNext(); });
-      }, waitMs);
-    };
-    runNext();
-  }
-
-  // 📺 오래된 영상(골든아워 지남) — 30분 곡선 없이 일반 쇼츠 조회 시딩. 한 조회 끝나면 자연스러운 랜덤 간격 후 다음.
-  //   (골든아워는 '방금 올린 30분'에 velocity를 몰아주는 것. 지난 영상은 그냥 조회수만 자연스럽게 올린다.)
-  function runPlainViews(video: { url: string; type: "shorts" | "longform" }, total: number, jobId: string, onVideoDone: () => void) {
-    let done = 0;
-    const runNext = () => {
-      if (schedRef.current.stop) { setRunning(false); return; }
-      if (viewLimit > 0 && usedTodayRef.current >= viewLimit) {
-        pushLog("err", `🛑 오늘 조회 한도(${viewLimit.toLocaleString()}회) 도달 — 시딩을 멈춰요. 자정 초기화 또는 등급 상향 후 이어서 하세요.`);
-        schedRef.current.stop = true; setRunning(false); return;
-      }
-      if (done >= total) {
-        pushLog("ok", `${queueTotal > 1 ? "  " : ""}✅ 이 영상 조회 시딩 완료 — 조회 ${done}회`);
-        onVideoDone(); return;
-      }
-      const idx = done;
-      pushLog("sys", `▶️ ${idx + 1}번째 조회 · 목표 ${total} · 완료 ${done} · 남음 ${total - done}`);
-      runOneView(video, jobId + "_" + idx, () => {
-        done += 1; setGhDone(done);
-        const wait = 6000 + Math.floor(Math.random() * 14000);   // 6~20초 랜덤(자연스럽게, 곡선 아님)
-        schedRef.current.timer = setTimeout(runNext, wait);
-      });
-    };
-    runNext();
-  }
-
   // 조회 1건 실행(SSE) — 끝나면 onDone 콜백으로 다음 예약. 플랫폼별 봇/파라미터.
   function runOneView(video: { url: string; type: "shorts" | "longform" }, jobId: string, onDone: () => void) {
+    // 🎲 이번 조회에 쓸 실제 유입 출처(랜덤이면 섞은 주머니에서 하나, 아니면 선택값). 봇엔 항상 확정된 3종 중 하나만 넘어감.
+    const gw = pickGateway();
+    if (gateway === "random") pushLog("log", `🎲 이번 유입 출처 → ${gw === "instagram" ? "인스타" : gw === "facebook" ? "페북" : "직접"}`);
     const q = isYt
-      ? new URLSearchParams({ videoUrl: video.url, videoType: video.type, gateway, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId })
-      : new URLSearchParams({ postUrl: video.url, contentType, gateway, watchSeconds: String(watchSeconds || 30), nationality, headful: visible ? "1" : "0", jobId });
+      ? new URLSearchParams({ videoUrl: video.url, videoType: video.type, gateway: gw, watchSeconds: String(watchSeconds), nationality, headful: visible ? "1" : "0", jobId })
+      : new URLSearchParams({ postUrl: video.url, contentType, gateway: gw, watchSeconds: String(watchSeconds || 30), nationality, headful: visible ? "1" : "0", jobId });
     jobRef.current = jobId;
     try {
       const es = new BotEventStream(`${BOT}/api/seed/view?${q}`, { method: "GET" });
@@ -848,7 +837,7 @@ function SeedingPanel({ platform, showToast, T, dark, userId, allowedActions, pl
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
           <Seg label="콘텐츠" value={contentType} opts={CONTENT[platform]} onPick={setContentType} accent={accent} T={T} />
           <Seg label="국적(계정풀)" value={nationality} opts={[["kr", "🇰🇷 한국인"], ["foreign", "🌍 외국인"]]} onPick={(v) => setNationality(v as Nationality)} accent={accent} T={T} />
-          <Seg label="게이트웨이" value={gateway} opts={[["instagram", "인스타"], ["facebook", "페북"], ["direct", "직접"]]} onPick={(v) => setGateway(v as Gateway)} accent={accent} T={T} />
+          <Seg label="게이트웨이" value={gateway} opts={[["instagram", "인스타"], ["facebook", "페북"], ["direct", "직접"], ["random", "🎲랜덤"]]} onPick={(v) => setGateway(v as Gateway)} accent={accent} T={T} />
           {isYt && contentType === "longform" && (
             <div>
               <div style={{ fontSize: 10.5, color: T.sub, marginBottom: 5 }}>시청(초)</div>
