@@ -148,12 +148,12 @@ async function ensurePlaying(page: Page): Promise<number> {
 // ═══════════════════════════════════════════════════════════════
 //  채널 영상목록 불러오기 (A+B 혼합) — 쇼츠/롱폼 분류 + 메타 수집
 //  ★ 분류 기준(테리 확정): 유튜브 공식 분류(어느 탭)를 1차로 따르고,
-//    재생시간 179초(2:59) 상한으로 보정한다(2024-10-15 쇼츠 3분 규칙).
-//    - 쇼츠 = /shorts 탭 & duration ≤ 179s
-//    - 롱폼 = /videos 탭  (또는 쇼츠탭이라도 duration > 179s면 강등)
+//    재생시간 180초(3:00) 상한으로 보정한다(2024-10-15 쇼츠 3분 규칙 = 180초 이하가 쇼츠).
+//    - 쇼츠 = /shorts 탭 & duration ≤ 180s
+//    - 롱폼 = /videos 탭  (또는 쇼츠탭이라도 duration > 180s면 강등)
 //  ★ 수익화(YPP) 브리핑 재활용 위해 구독자수 + 영상별 조회수도 같이 긁는다.
 // ═══════════════════════════════════════════════════════════════
-export const SHORTS_MAX_SEC = 179; // 2:59 — 이 이하만 쇼츠(그 초과는 롱폼)
+export const SHORTS_MAX_SEC = 180; // 3:00 — 이 이하만 쇼츠(그 초과는 롱폼, 유튜브 공식 기준)
 
 export interface ChannelVideo {
   videoId: string;
@@ -334,7 +334,7 @@ export async function fetchChannelVideos(params: {
       for (const it of raw) {
         if (map.has(it.videoId)) continue;
         const durationSec = parseDuration(it.durationText);
-        // 분류: 탭 기준 + 2:59 상한 보정(쇼츠탭이라도 179s 초과면 롱폼)
+        // 분류: 탭 기준 + 3:00 상한 보정(쇼츠탭이라도 180s 초과면 롱폼)
         let type: "shorts" | "longform" = tabType;
         if (type === "shorts" && durationSec != null && durationSec > SHORTS_MAX_SEC) type = "longform";
         map.set(it.videoId, {
